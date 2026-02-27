@@ -1329,6 +1329,27 @@ var KNOWLEDGE = {
       "An <strong>r value</strong> near +1 means metrics rise and fall together; near -1 means they move in opposite directions. "+
       "Only correlations with p < 0.05 and |r| > 0.3 are considered meaningful. "+
       "Correlation does not imply causation \u2014 a third factor may drive both metrics."
+  },
+  vitals: {
+    title: "Blood Pressure",
+    text: "<strong>Blood pressure</strong> is recorded as systolic over diastolic (e.g. 120/80 mmHg). "+
+      "The American Heart Association classifies readings as: <strong>Normal</strong> (<120/<80), "+
+      "<strong>Elevated</strong> (120\u2013129/<80), <strong>Stage 1 Hypertension</strong> (130\u2013139 or 80\u201389), "+
+      "and <strong>Stage 2 Hypertension</strong> (140+ or 90+). "+
+      "Blood pressure varies throughout the day and can be influenced by stress, caffeine, posture, and activity. "+
+      "Apple Watch blood pressure sensing is an emerging feature with limited clinical validation \u2014 "+
+      "use it for trend awareness, not diagnosis. A cuff-based measurement remains the clinical standard."
+  },
+  body: {
+    title: "Body Composition",
+    text: "<strong>Body mass</strong> fluctuates naturally by 1\u20132 kg day-to-day due to hydration, meals, and sodium intake. "+
+      "Weekly averages are more meaningful than any single reading. "+
+      "<strong>BMI</strong> (Body Mass Index) is a rough population-level screening tool; it does not distinguish muscle from fat "+
+      "and can misclassify athletic individuals. "+
+      "<strong>Body fat percentage</strong> is a more useful indicator of metabolic health. Healthy ranges vary by age and sex "+
+      "(roughly 10\u201320% for men, 18\u201328% for women). "+
+      "<strong>Lean body mass</strong> includes muscle, bone, organs, and water \u2014 maintaining it is important for metabolism, "+
+      "mobility, and long-term health."
   }
 };
 
@@ -1429,6 +1450,170 @@ function renderExecutiveSummary(D) {
       c.score>=4?COLORS.success:c.score>=3?COLORS.warning:COLORS.danger, decimals:1});
   });
   sec.appendChild(bulletCard);
+}
+
+/* --- VITALS (Blood Pressure) --- */
+function renderVitals(D) {
+  var v = D.vitals;
+  if (!v) return;
+  var sec = section("vitals");
+  sectionHeader(sec, "Vitals", "Blood pressure readings and trends");
+
+  var sysS = v.systolic_stats || {};
+  var diaS = v.diastolic_stats || {};
+
+  // Hero cards
+  var grid = el("div", {className:"grid"});
+
+  var sysCard = card("Systolic");
+  var sysClass = sysS.mean < 120 ? "normal" : sysS.mean < 130 ? "elevated" : sysS.mean < 140 ? "stage 1" : "stage 2";
+  var sysTrend = sysS.mean < 120 ? "up" : sysS.mean < 130 ? "flat" : "warn";
+  sysCard.appendChild(bigNum(fmt(sysS.mean, 0), "mmHg", sysTrend, sysClass));
+  statsPanel(sysCard, sysS, {decimals: 0});
+  grid.appendChild(sysCard);
+
+  var diaCard = card("Diastolic");
+  var diaClass = diaS.mean < 80 ? "normal" : diaS.mean < 90 ? "stage 1" : "stage 2";
+  var diaTrend = diaS.mean < 80 ? "up" : diaS.mean < 90 ? "flat" : "warn";
+  diaCard.appendChild(bigNum(fmt(diaS.mean, 0), "mmHg", diaTrend, diaClass));
+  statsPanel(diaCard, diaS, {decimals: 0});
+  grid.appendChild(diaCard);
+
+  sec.appendChild(grid);
+
+  // Blood pressure scatter plot (systolic vs diastolic)
+  var paired = v.paired_readings || [];
+  if (paired.length > 2) {
+    var scatCard = card("Systolic vs Diastolic", [], "wide");
+    var pts = paired.map(function(r) {
+      return {x: r.diastolic, y: r.systolic, label: r.date + ": " + r.systolic + "/" + r.diastolic};
+    });
+    scatterPlot(scatCard, pts, {
+      color: COLORS.danger, trendLine: true,
+      xLabel: "Diastolic (mmHg)", yLabel: "Systolic (mmHg)", height: 260
+    });
+    sec.appendChild(scatCard);
+  }
+
+  // Systolic area trend
+  if (sysS.dates && sysS.values) {
+    var sysArea = card("Systolic Trend", [], "wide");
+    areaChart(sysArea, {dates: sysS.dates, values: sysS.values, rolling_7d: sysS.rolling_7d},
+      {color: COLORS.danger, height: 140});
+    sysArea.appendChild(legendRow([
+      {color: COLORS.danger, label: "Systolic"},
+      {color: "#c4a04e", label: "7-day rolling avg"}
+    ]));
+    sec.appendChild(sysArea);
+  }
+
+  // Diastolic area trend
+  if (diaS.dates && diaS.values) {
+    var diaArea = card("Diastolic Trend", [], "wide");
+    areaChart(diaArea, {dates: diaS.dates, values: diaS.values, rolling_7d: diaS.rolling_7d},
+      {color: COLORS.info, height: 140});
+    diaArea.appendChild(legendRow([
+      {color: COLORS.info, label: "Diastolic"},
+      {color: "#c4a04e", label: "7-day rolling avg"}
+    ]));
+    sec.appendChild(diaArea);
+  }
+
+  knowledgePanel(sec, "vitals");
+}
+
+/* --- BODY COMPOSITION --- */
+function renderBody(D) {
+  var b = D.body;
+  if (!b) return;
+  var sec = section("body");
+  sectionHeader(sec, "Body Composition", "Mass, body fat, and lean tissue");
+
+  var massS = b.mass_stats || {};
+  var bfS = b.body_fat_stats;
+  var bmiS = b.bmi_stats;
+  var lmS = b.lean_mass_stats;
+
+  // Hero cards
+  var grid = el("div", {className:"grid"});
+
+  var massCard = card("Body Mass");
+  massCard.appendChild(bigNum(fmt(massS.mean, 1), "kg",
+    massS.trend_direction === "up" ? "warn" : massS.trend_direction === "down" ? "down" : "flat",
+    massS.trend_direction || "stable"));
+  statsPanel(massCard, massS, {decimals: 1});
+  grid.appendChild(massCard);
+
+  if (bmiS) {
+    var bmiCard = card("BMI");
+    var bmiLabel = bmiS.mean < 18.5 ? "underweight" : bmiS.mean < 25 ? "normal" : bmiS.mean < 30 ? "overweight" : "obese";
+    var bmiTrend = bmiS.mean < 18.5 ? "warn" : bmiS.mean < 25 ? "up" : bmiS.mean < 30 ? "flat" : "down";
+    bmiCard.appendChild(bigNum(fmt(bmiS.mean, 1), "", bmiTrend, bmiLabel));
+    statsPanel(bmiCard, bmiS, {decimals: 1});
+    grid.appendChild(bmiCard);
+  }
+
+  if (bfS) {
+    var bfCard = card("Body Fat");
+    bfCard.appendChild(bigNum(fmt(bfS.mean, 1), "%"));
+    statsPanel(bfCard, bfS, {decimals: 1});
+    grid.appendChild(bfCard);
+  }
+
+  if (lmS) {
+    var lmCard = card("Lean Body Mass");
+    lmCard.appendChild(bigNum(fmt(lmS.mean, 1), "kg"));
+    statsPanel(lmCard, lmS, {decimals: 1});
+    grid.appendChild(lmCard);
+  }
+
+  sec.appendChild(grid);
+
+  // Body mass area chart
+  if (massS.dates && massS.values) {
+    var massArea = card("Body Mass Trend", [], "wide");
+    areaChart(massArea, {dates: massS.dates, values: massS.values, rolling_7d: massS.rolling_7d},
+      {color: COLORS.primary, height: 160});
+    massArea.appendChild(legendRow([
+      {color: COLORS.primary, label: "Daily"},
+      {color: "#c4a04e", label: "7-day rolling avg"}
+    ]));
+    sec.appendChild(massArea);
+  }
+
+  // Body fat trend (if available)
+  if (bfS && bfS.dates && bfS.values) {
+    var bfArea = card("Body Fat Trend", [], "wide");
+    areaChart(bfArea, {dates: bfS.dates, values: bfS.values, rolling_7d: bfS.rolling_7d},
+      {color: COLORS.warning, height: 140});
+    // Overlay lean mass if available and same date range
+    if (lmS && lmS.dates && lmS.values) {
+      bfArea.appendChild(legendRow([
+        {color: COLORS.warning, label: "Body fat %"},
+        {color: "#c4a04e", label: "7-day rolling avg"}
+      ]));
+    } else {
+      bfArea.appendChild(legendRow([
+        {color: COLORS.warning, label: "Body fat %"},
+        {color: "#c4a04e", label: "7-day rolling avg"}
+      ]));
+    }
+    sec.appendChild(bfArea);
+  }
+
+  // Lean mass trend (if available)
+  if (lmS && lmS.dates && lmS.values) {
+    var lmArea = card("Lean Body Mass Trend", [], "wide");
+    areaChart(lmArea, {dates: lmS.dates, values: lmS.values, rolling_7d: lmS.rolling_7d},
+      {color: COLORS.success, height: 140});
+    lmArea.appendChild(legendRow([
+      {color: COLORS.success, label: "Lean mass"},
+      {color: "#c4a04e", label: "7-day rolling avg"}
+    ]));
+    sec.appendChild(lmArea);
+  }
+
+  knowledgePanel(sec, "body");
 }
 
 /* --- SLEEP --- */
@@ -1544,6 +1729,27 @@ function renderSleep(D) {
     sec.appendChild(histCard);
   }
 
+  // Wrist temperature during sleep
+  var wtS = s.wrist_temp_stats;
+  if (wtS && wtS.n > 0) {
+    var wtCard = card("Sleeping Wrist Temperature", [], "wide");
+    wtCard.appendChild(bigNum(fmt(wtS.mean, 2), "\u00b0C deviation"));
+    if (wtS.dates && wtS.values) {
+      areaChart(wtCard, {dates: wtS.dates, values: wtS.values, rolling_7d: wtS.rolling_7d},
+        {color: COLORS.accent3, height: 130});
+      wtCard.appendChild(legendRow([
+        {color: COLORS.accent3, label: "Nightly"},
+        {color: "#c4a04e", label: "7-day rolling avg"}
+      ]));
+    }
+    statsPanel(wtCard, wtS, {decimals: 2});
+    wtCard.appendChild(el("div", {className:"knowledge-panel", innerHTML:
+      "<div class='kp-title'>About Wrist Temperature</div>" +
+      "Wrist temperature during sleep can reflect changes in your body's circadian rhythm and metabolic activity. " +
+      "Deviations from baseline may correlate with illness, ovulation, or environmental factors."}));
+    sec.appendChild(wtCard);
+  }
+
   knowledgePanel(sec, "sleep");
 }
 
@@ -1649,6 +1855,46 @@ function renderHeart(D) {
     });
     radarChart(dowCard, normalizedAxes, {size:220, maxVal:5, fill:"rgba(179,107,107,0.12)", stroke:COLORS.danger});
     sec.appendChild(dowCard);
+  }
+
+  // VO2 Max
+  var vo2S = h.vo2_max_stats;
+  if (vo2S && vo2S.n > 0) {
+    var vo2Card = card("VO2 Max", [], "wide");
+    vo2Card.appendChild(bigNum(fmt(vo2S.mean, 1), "mL/kg/min",
+      vo2S.mean >= 40 ? "up" : vo2S.mean >= 30 ? "flat" : "down",
+      vo2S.mean >= 40 ? "good" : vo2S.mean >= 30 ? "fair" : "low"));
+    if (vo2S.dates && vo2S.values) {
+      areaChart(vo2Card, {dates: vo2S.dates, values: vo2S.values, rolling_7d: vo2S.rolling_7d},
+        {color: COLORS.success, height: 140});
+      vo2Card.appendChild(legendRow([
+        {color: COLORS.success, label: "VO2 Max"},
+        {color: "#c4a04e", label: "7-day rolling avg"}
+      ]));
+    }
+    statsPanel(vo2Card, vo2S, {decimals: 1});
+    vo2Card.appendChild(el("div", {className:"knowledge-panel", innerHTML:
+      "<div class='kp-title'>About VO2 Max</div>" +
+      "<strong>VO2 max</strong> measures the maximum rate of oxygen consumption during exercise and is widely considered " +
+      "the best indicator of cardiorespiratory fitness. Higher values indicate better aerobic capacity. " +
+      "Typical ranges are 30\u201360 mL/kg/min for adults, varying by age and sex. " +
+      "Improvements are achievable through consistent aerobic training."}));
+    sec.appendChild(vo2Card);
+  }
+
+  // Daily average heart rate
+  var dhrS = h.daily_hr_stats;
+  if (dhrS && dhrS.n > 0 && dhrS.dates && dhrS.values) {
+    var dhrCard = card("Daily Average Heart Rate", [], "wide");
+    dhrCard.appendChild(bigNum(fmt(dhrS.mean, 0), "bpm avg"));
+    areaChart(dhrCard, {dates: dhrS.dates, values: dhrS.values, rolling_7d: dhrS.rolling_7d},
+      {color: COLORS.accent2, height: 140});
+    dhrCard.appendChild(legendRow([
+      {color: COLORS.accent2, label: "Daily avg HR"},
+      {color: "#c4a04e", label: "7-day rolling avg"}
+    ]));
+    statsPanel(dhrCard, dhrS, {decimals: 0});
+    sec.appendChild(dhrCard);
   }
 
   knowledgePanel(sec, "heart");
@@ -1757,6 +2003,44 @@ function renderActivity(D) {
   statsPanel(detCard, stS, {decimals:0});
   sec.appendChild(detCard);
 
+  // Flights climbed
+  var flS = a.flights_stats;
+  if (flS && flS.n > 0) {
+    var flCard = card("Flights Climbed", [], "wide");
+    flCard.appendChild(bigNum(fmt(flS.mean, 1), "flights/day"));
+    if (flS.dates && flS.values) {
+      lollipopChart(flCard, {dates: flS.dates, values: flS.values}, {color: COLORS.accent3, height: 130});
+    }
+    statsPanel(flCard, flS, {decimals: 1});
+    sec.appendChild(flCard);
+  }
+
+  // Stand time
+  var standS = a.stand_time_stats;
+  if (standS && standS.n > 0) {
+    var standCard = card("Stand Time", [], "wide");
+    standCard.appendChild(bigNum(fmt(standS.mean, 0), "min/day"));
+    if (standS.dates && standS.values) {
+      areaChart(standCard, {dates: standS.dates, values: standS.values, rolling_7d: standS.rolling_7d},
+        {color: COLORS.info, height: 130});
+      standCard.appendChild(legendRow([
+        {color: COLORS.info, label: "Daily stand time"},
+        {color: "#c4a04e", label: "7-day rolling avg"}
+      ]));
+    }
+    statsPanel(standCard, standS, {decimals: 0});
+    sec.appendChild(standCard);
+  }
+
+  // Basal energy
+  var basalS = a.basal_energy_stats;
+  if (basalS && basalS.n > 0) {
+    var basalCard = card("Basal Energy Burn");
+    basalCard.appendChild(bigNum(fmt(basalS.mean, 0), "kcal/day"));
+    statsPanel(basalCard, basalS, {decimals: 0});
+    sec.appendChild(basalCard);
+  }
+
   knowledgePanel(sec, "activity");
 }
 
@@ -1856,6 +2140,74 @@ function renderMobility(D) {
     sec.appendChild(histCard);
   }
 
+  // Stair speeds (ascent vs descent)
+  var saS = m.stair_ascent_stats;
+  var sdS = m.stair_descent_stats;
+  if ((saS && saS.n > 0) || (sdS && sdS.n > 0)) {
+    var stairCard = card("Stair Speed", [], "wide");
+
+    // Use grouped bar if we have day-of-week data for both, otherwise show dual trends
+    if (saS && sdS && saS.dates && saS.values && sdS.dates && sdS.values) {
+      // Dual area overlay — ascent and descent on same chart
+      var stairWrap = el("div");
+      areaChart(stairWrap, {dates: saS.dates, values: saS.values, rolling_7d: saS.rolling_7d},
+        {color: COLORS.primary, height: 130});
+      stairCard.appendChild(stairWrap);
+      // Overlay descent as a second card section to avoid chart overlap complexity
+      var descWrap = el("div", {style:{marginTop:"8px"}});
+      areaChart(descWrap, {dates: sdS.dates, values: sdS.values, rolling_7d: sdS.rolling_7d},
+        {color: COLORS.accent2, height: 130});
+      stairCard.appendChild(descWrap);
+      stairCard.appendChild(legendRow([
+        {color: COLORS.primary, label: "Ascent (floors/min)"},
+        {color: COLORS.accent2, label: "Descent (floors/min)"}
+      ]));
+    }
+
+    var stairGrid = el("div", {className:"grid"});
+    if (saS && saS.n > 0) {
+      var saCard = card("Stair Ascent Speed");
+      saCard.appendChild(bigNum(fmt(saS.mean, 2), "floors/min"));
+      statsPanel(saCard, saS, {decimals: 2});
+      stairGrid.appendChild(saCard);
+    }
+    if (sdS && sdS.n > 0) {
+      var sdCard2 = card("Stair Descent Speed");
+      sdCard2.appendChild(bigNum(fmt(sdS.mean, 2), "floors/min"));
+      statsPanel(sdCard2, sdS, {decimals: 2});
+      stairGrid.appendChild(sdCard2);
+    }
+    stairCard.appendChild(stairGrid);
+    sec.appendChild(stairCard);
+  }
+
+  // Double support percentage
+  var dsS = m.double_support_stats;
+  if (dsS && dsS.n > 0) {
+    var dsCard = card("Double Support Time", [], "wide");
+    dsCard.appendChild(bigNum(fmt(dsS.mean, 1), "% of gait cycle"));
+    if (dsS.dates && dsS.values) {
+      areaChart(dsCard, {dates: dsS.dates, values: dsS.values, rolling_7d: dsS.rolling_7d},
+        {color: COLORS.accent3, height: 130});
+      dsCard.appendChild(legendRow([
+        {color: COLORS.accent3, label: "Double support %"},
+        {color: "#c4a04e", label: "7-day rolling avg"}
+      ]));
+    }
+    statsPanel(dsCard, dsS, {decimals: 1});
+    sec.appendChild(dsCard);
+  }
+
+  // Walking steadiness
+  var stS2 = m.steadiness_stats;
+  if (stS2 && stS2.n > 0 && stS2.values && stS2.values.length > 0) {
+    var stCard = card("Walking Steadiness", [], "wide");
+    stCard.appendChild(bigNum(fmt(stS2.mean, 0), "%"));
+    stripPlot(stCard, stS2.values, {color: COLORS.success, min: 0, max: 100, minLabel: "0%", maxLabel: "100%"});
+    statsPanel(stCard, stS2, {decimals: 0});
+    sec.appendChild(stCard);
+  }
+
   knowledgePanel(sec, "mobility");
 }
 
@@ -1947,6 +2299,8 @@ if (MODE === 'report') {
   try {
     renderHeader(D);
     renderExecutiveSummary(D);
+    if (D.vitals) renderVitals(D);
+    if (D.body) renderBody(D);
     if (D.sleep) renderSleep(D);
     if (D.heart) renderHeart(D);
     if (D.activity) renderActivity(D);
