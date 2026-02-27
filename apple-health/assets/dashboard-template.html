@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Health Insights Dashboard</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0a0f;color:#e0e0e8;font-family:-apple-system,BlinkMacSystemFont,'SF Pro',sans-serif;
+  line-height:1.5;padding:20px;min-height:100vh}
+h1{font-size:1.6rem;font-weight:700;margin-bottom:4px;color:#fff}
+h2{font-size:1.1rem;font-weight:600;margin-bottom:12px;color:#aab}
+h3{font-size:.95rem;font-weight:600;color:#99a;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
+.subtitle{color:#778;font-size:.85rem;margin-bottom:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:20px}
+.card{background:#151520;border:1px solid #222;border-radius:12px;padding:20px;transition:border-color .2s}
+.card:hover{border-color:#334}
+.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.big-num{font-size:2.2rem;font-weight:700;color:#fff;line-height:1.1}
+.big-num small{font-size:.85rem;font-weight:400;color:#889}
+.label{font-size:.8rem;color:#778;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.trend{display:inline-block;font-size:.75rem;font-weight:600;padding:3px 10px;border-radius:20px;margin-left:8px}
+.trend.up{background:rgba(74,222,128,.15);color:#4ade80}
+.trend.down{background:rgba(248,113,113,.15);color:#f87171}
+.trend.warn{background:rgba(251,191,36,.15);color:#fbbf24}
+.trend.neutral{background:rgba(148,163,184,.15);color:#94a3b8}
+/* Bar chart */
+.bar-chart{display:flex;align-items:flex-end;gap:2px;height:80px;padding-top:4px}
+.bar-chart.tall{height:120px}
+.bar{flex:1;min-width:3px;border-radius:3px 3px 0 0;position:relative;transition:opacity .2s;cursor:default}
+.bar:hover{opacity:.8}
+.bar .tip{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);
+  background:#222;color:#eee;font-size:.7rem;padding:3px 8px;border-radius:6px;white-space:nowrap;z-index:10;
+  pointer-events:none}
+.bar:hover .tip{display:block}
+/* Sleep stages stacked bar */
+.sleep-stages{display:flex;height:28px;border-radius:6px;overflow:hidden;margin:8px 0}
+.sleep-stages>div{display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:600;color:#fff;min-width:0}
+.stage-deep{background:#6366f1}
+.stage-core{background:#3b82f6}
+.stage-rem{background:#a855f7}
+.stage-awake{background:#64748b}
+/* Legend */
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin:8px 0}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:.75rem;color:#99a}
+.legend-dot{width:10px;height:10px;border-radius:3px}
+/* SVG line chart */
+svg.line-chart{width:100%;height:80px;overflow:visible}
+svg.line-chart polyline{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+svg.line-chart circle{r:3;cursor:default}
+svg.line-chart text{font-size:9px;fill:#778}
+/* Table */
+.data-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.data-table th{text-align:left;padding:8px 10px;color:#889;font-weight:500;border-bottom:1px solid #222;font-size:.75rem;text-transform:uppercase;letter-spacing:.3px}
+.data-table td{padding:8px 10px;border-bottom:1px solid #1a1a25}
+.data-table tr:hover td{background:#1a1a25}
+.r-strong{color:#4ade80;font-weight:600}
+.r-moderate{color:#fbbf24;font-weight:600}
+.r-weak{color:#94a3b8}
+/* Compare delta badges */
+.delta{font-size:.8rem;font-weight:600;padding:2px 8px;border-radius:12px;display:inline-block}
+.delta.pos{background:rgba(74,222,128,.15);color:#4ade80}
+.delta.neg{background:rgba(248,113,113,.15);color:#f87171}
+.delta.zero{background:rgba(148,163,184,.15);color:#94a3b8}
+/* Anomaly list */
+.anomaly-item{padding:8px 12px;border-left:3px solid #f87171;margin-bottom:6px;background:#1a1520;border-radius:0 8px 8px 0;font-size:.85rem}
+.anomaly-item .date{color:#f87171;font-weight:600}
+/* Wide card */
+.card.wide{grid-column:1 / -1}
+/* Responsive */
+@media(max-width:600px){
+  body{padding:12px}
+  .grid{grid-template-columns:1fr}
+  .big-num{font-size:1.8rem}
+}
+</style>
+</head>
+<body>
+<!--DATA_INJECTION-->
+<div id="app"></div>
+<script>
+(function(){
+  var D = window.__DATA__ || {};
+  var MODE = window.__MODE__ || "scan";
+  var app = document.getElementById("app");
+
+  // --- Utility functions ---
+  function el(tag, attrs, children) {
+    var e = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function(k) {
+      if (k === "className") e.className = attrs[k];
+      else if (k === "innerHTML") e.innerHTML = attrs[k];
+      else if (k === "textContent") e.textContent = attrs[k];
+      else if (k === "style" && typeof attrs[k] === "object") Object.assign(e.style, attrs[k]);
+      else e.setAttribute(k, attrs[k]);
+    });
+    if (children) {
+      if (!Array.isArray(children)) children = [children];
+      children.forEach(function(c) {
+        if (typeof c === "string") e.appendChild(document.createTextNode(c));
+        else if (c) e.appendChild(c);
+      });
+    }
+    return e;
+  }
+
+  function card(titleText, bodyEls, cls) {
+    var c = el("div", {className: "card" + (cls ? " " + cls : "")});
+    if (titleText) c.appendChild(el("h3", {textContent: titleText}));
+    if (bodyEls) {
+      if (!Array.isArray(bodyEls)) bodyEls = [bodyEls];
+      bodyEls.forEach(function(b) { if (b) c.appendChild(b); });
+    }
+    return c;
+  }
+
+  function bigNum(value, unit, trendDir, trendText) {
+    var wrap = el("div");
+    var num = el("div", {className: "big-num"});
+    num.appendChild(document.createTextNode(value));
+    if (unit) num.appendChild(el("small", {textContent: " " + unit}));
+    if (trendDir) {
+      var badge = el("span", {className: "trend " + trendDir, textContent: trendText || trendDir});
+      num.appendChild(badge);
+    }
+    wrap.appendChild(num);
+    return wrap;
+  }
+
+  function fmt(v, decimals) {
+    if (v == null) return "--";
+    if (decimals === 0) return Math.round(v).toLocaleString();
+    return Number(v).toFixed(decimals == null ? 1 : decimals);
+  }
+
+  function pct(v) { return v == null ? "--" : fmt(v, 1) + "%"; }
+
+  function safeGet(obj, key, fallback) {
+    return (obj && obj[key] != null) ? obj[key] : (fallback != null ? fallback : null);
+  }
+
+  // --- Bar chart builder ---
+  function barChart(values, opts) {
+    opts = opts || {};
+    var maxVal = opts.max || Math.max.apply(null, values.map(function(v){return v.value || 0})) || 1;
+    var container = el("div", {className: "bar-chart" + (opts.tall ? " tall" : "")});
+    values.forEach(function(item) {
+      var h = Math.max(2, ((item.value || 0) / maxVal) * 100);
+      var b = el("div", {className: "bar", style: {
+        height: h + "%",
+        background: item.color || "#6366f1"
+      }});
+      if (item.tip) b.appendChild(el("span", {className: "tip", textContent: item.tip}));
+      container.appendChild(b);
+    });
+    return container;
+  }
+
+  // --- SVG line chart builder ---
+  function lineChart(points, opts) {
+    opts = opts || {};
+    var w = 500, h = 80, pad = 4;
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "line-chart");
+    svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+    svg.setAttribute("preserveAspectRatio", "none");
+    if (!points || points.length === 0) return svg;
+    var vals = points.map(function(p){return p.value});
+    var minV = Math.min.apply(null, vals), maxV = Math.max.apply(null, vals);
+    if (minV === maxV) { minV -= 1; maxV += 1; }
+    var range = maxV - minV;
+    var coords = points.map(function(p, i) {
+      var x = pad + (i / Math.max(1, points.length - 1)) * (w - pad * 2);
+      var y = h - pad - ((p.value - minV) / range) * (h - pad * 2);
+      return {x: x, y: y, label: p.label, value: p.value};
+    });
+    var polyStr = coords.map(function(c){return c.x + "," + c.y}).join(" ");
+    var polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+    polyline.setAttribute("points", polyStr);
+    polyline.setAttribute("stroke", opts.color || "#6366f1");
+    svg.appendChild(polyline);
+    // Dots
+    coords.forEach(function(c) {
+      var circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      circle.setAttribute("cx", c.x);
+      circle.setAttribute("cy", c.y);
+      circle.setAttribute("fill", opts.color || "#6366f1");
+      var title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+      title.textContent = (c.label || "") + ": " + fmt(c.value);
+      circle.appendChild(title);
+      svg.appendChild(circle);
+    });
+    return svg;
+  }
+
+  // --- Sleep stages stacked bar ---
+  function sleepStagesBar(deep, core, rem) {
+    var total = (deep || 0) + (core || 0) + (rem || 0);
+    if (total === 0) return el("div", {textContent: "No stage data"});
+    var container = el("div", {className: "sleep-stages"});
+    [{val: deep, cls: "stage-deep", label: "Deep"}, {val: core, cls: "stage-core", label: "Core"}, {val: rem, cls: "stage-rem", label: "REM"}].forEach(function(s) {
+      if (s.val > 0) {
+        var w = (s.val / total * 100).toFixed(1);
+        var seg = el("div", {className: s.cls, style: {width: w + "%"}, textContent: w > 12 ? s.label + " " + fmt(s.val, 1) + "%" : ""});
+        container.appendChild(seg);
+      }
+    });
+    return container;
+  }
+
+  function legend(items) {
+    var wrap = el("div", {className: "legend"});
+    items.forEach(function(it) {
+      var item = el("div", {className: "legend-item"});
+      item.appendChild(el("div", {className: "legend-dot", style: {background: it.color}}));
+      item.appendChild(el("span", {textContent: it.label}));
+      wrap.appendChild(item);
+    });
+    return wrap;
+  }
+
+  // --- Mode renderers ---
+
+  function renderScan() {
+    var period = D.period || {};
+    app.appendChild(el("h1", {textContent: "Health Scan"}));
+    app.appendChild(el("div", {className: "subtitle", textContent: (period.from || "?") + "  to  " + (period.to || "?")}));
+
+    // Trend alerts
+    var alerts = D.trend_alerts || [];
+    if (alerts.length > 0) {
+      app.appendChild(el("h2", {textContent: "Trends"}));
+      var grid = el("div", {className: "grid"});
+      alerts.forEach(function(a) {
+        var dir = a.direction === "up" ? "up" : "down";
+        var sign = a.change_pct > 0 ? "+" : "";
+        var body = bigNum(sign + fmt(a.change_pct, 1) + "%", null, dir, dir);
+        var lbl = el("div", {className: "label", textContent: (a.metric || "").replace(/-/g, " ")});
+        var detail = el("div", {style: {fontSize: ".8rem", color: "#778", marginTop: "6px"},
+          textContent: fmt(a.first_half_avg, 0) + " \u2192 " + fmt(a.second_half_avg, 0)});
+        grid.appendChild(card(null, [lbl, body, detail]));
+      });
+      app.appendChild(grid);
+    }
+
+    // Anomalies
+    var anomalies = D.anomalies || [];
+    if (anomalies.length > 0) {
+      var anomCard = card("Anomalies");
+      anomalies.slice(0, 15).forEach(function(a) {
+        var item = el("div", {className: "anomaly-item"});
+        item.appendChild(el("span", {className: "date", textContent: a.date}));
+        item.appendChild(document.createTextNode("  " + (a.metric || "").replace(/-/g, " ") +
+          ": " + fmt(a.value, 0) + " (z=" + fmt(a.z_score, 2) + ")"));
+        anomCard.appendChild(item);
+      });
+      app.appendChild(el("div", {className: "grid"}, [anomCard]));
+    }
+
+    // Correlations
+    var corrs = D.correlations || [];
+    if (corrs.length > 0) {
+      var tbl = el("table", {className: "data-table"});
+      tbl.appendChild(el("thead", {}, [el("tr", {}, [
+        el("th", {textContent: "Metric A"}), el("th", {textContent: "Metric B"}),
+        el("th", {textContent: "Lag"}), el("th", {textContent: "r"})
+      ])]));
+      var tbody = el("tbody");
+      corrs.forEach(function(c) {
+        var absR = Math.abs(c.r);
+        var cls = absR > 0.5 ? "r-strong" : absR > 0.3 ? "r-moderate" : "r-weak";
+        tbody.appendChild(el("tr", {}, [
+          el("td", {textContent: (c.metric_a || "").replace(/-/g, " ")}),
+          el("td", {textContent: (c.metric_b || "").replace(/-/g, " ")}),
+          el("td", {textContent: c.lag + "d"}),
+          el("td", {className: cls, textContent: fmt(c.r, 3)})
+        ]));
+      });
+      tbl.appendChild(tbody);
+      app.appendChild(el("h2", {textContent: "Top Correlations"}));
+      app.appendChild(card(null, [tbl], "wide"));
+    }
+
+    // Consistency
+    var cons = D.consistency || {};
+    var consKeys = Object.keys(cons);
+    if (consKeys.length > 0) {
+      app.appendChild(el("h2", {textContent: "Consistency"}));
+      var cGrid = el("div", {className: "grid"});
+      if (cons.bedtime_stdev_min != null) {
+        cGrid.appendChild(card("Bedtime Variability", [bigNum(fmt(cons.bedtime_stdev_min, 0), "min stdev")]));
+      }
+      if (cons.exercise_frequency != null) {
+        cGrid.appendChild(card("Exercise Frequency", [bigNum(fmt(cons.exercise_frequency * 100, 0), "% of days")]));
+      }
+      if (cons.step_cv != null) {
+        var cvPct = (cons.step_cv * 100).toFixed(0);
+        var cvDir = cons.step_cv > 0.4 ? "warn" : "neutral";
+        cGrid.appendChild(card("Step Consistency", [bigNum(cvPct + "%", "CV", cvDir, cons.step_cv > 0.4 ? "high variance" : "consistent")]));
+      }
+      app.appendChild(cGrid);
+    }
+  }
+
+  function renderSleep() {
+    var period = D.period || {};
+    var avg = D.averages || {};
+    var nightly = D.nightly || [];
+
+    app.appendChild(el("h1", {textContent: "Sleep Analysis"}));
+    app.appendChild(el("div", {className: "subtitle", textContent: (period.from || "?") + "  to  " + (period.to || "?") + "  \u00b7  " + (D.nights_analyzed || 0) + " nights"}));
+
+    // Summary cards
+    var grid = el("div", {className: "grid"});
+
+    // Average total sleep
+    var sleepHrs = safeGet(avg, "total_hrs");
+    var sleepDir = sleepHrs != null ? (sleepHrs >= 7 ? "up" : sleepHrs >= 6 ? "warn" : "down") : "neutral";
+    var sleepLabel = sleepHrs != null ? (sleepHrs >= 7 ? "good" : sleepHrs >= 6 ? "fair" : "low") : "";
+    grid.appendChild(card("Average Sleep", [bigNum(fmt(sleepHrs), "hrs", sleepDir, sleepLabel)]));
+
+    // Average bedtime / waketime (computed as mean of minutes-from-midnight)
+    if (nightly.length > 0) {
+      var btMinutes = [];
+      var wtMinutes = [];
+      nightly.forEach(function(n) {
+        if (n.bedtime_local) {
+          var parts = n.bedtime_local.split("T")[1];
+          if (parts) {
+            var hm = parts.split(":");
+            var mins = parseInt(hm[0]) * 60 + parseInt(hm[1]);
+            // Treat times before noon as early morning (add 24h for averaging)
+            if (mins < 720) mins += 1440;
+            btMinutes.push(mins);
+          }
+        }
+        if (n.waketime_local) {
+          var parts = n.waketime_local.split("T")[1];
+          if (parts) {
+            var hm = parts.split(":");
+            wtMinutes.push(parseInt(hm[0]) * 60 + parseInt(hm[1]));
+          }
+        }
+      });
+      function minsToTimeStr(avgMins) {
+        avgMins = Math.round(avgMins) % 1440;
+        var h = Math.floor(avgMins / 60);
+        var m = avgMins % 60;
+        return (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m;
+      }
+      if (btMinutes.length) {
+        var avgBt = btMinutes.reduce(function(a,b){return a+b}, 0) / btMinutes.length;
+        grid.appendChild(card("Avg Bedtime", [bigNum(minsToTimeStr(avgBt), null)]));
+      }
+      if (wtMinutes.length) {
+        var avgWt = wtMinutes.reduce(function(a,b){return a+b}, 0) / wtMinutes.length;
+        grid.appendChild(card("Avg Waketime", [bigNum(minsToTimeStr(avgWt), null)]));
+      }
+    }
+
+    // Stage breakdown
+    var stageCard = card("Sleep Stages");
+    stageCard.appendChild(sleepStagesBar(safeGet(avg, "deep_pct", 0), safeGet(avg, "core_pct", 0), safeGet(avg, "rem_pct", 0)));
+    stageCard.appendChild(legend([
+      {color: "#6366f1", label: "Deep " + pct(avg.deep_pct)},
+      {color: "#3b82f6", label: "Core " + pct(avg.core_pct)},
+      {color: "#a855f7", label: "REM " + pct(avg.rem_pct)}
+    ]));
+    grid.appendChild(stageCard);
+    app.appendChild(grid);
+
+    // Nightly bar chart
+    if (nightly.length > 0) {
+      app.appendChild(el("h2", {textContent: "Nightly Sleep"}));
+      var bars = nightly.map(function(n) {
+        var hrs = n.total_hrs || 0;
+        var color = hrs >= 7 ? "#4ade80" : hrs >= 5 ? "#a855f7" : "#f87171";
+        return {value: hrs, color: color, tip: n.date + ": " + fmt(hrs) + "h"};
+      });
+      var chartCard = card(null, [
+        barChart(bars, {max: 10, tall: true}),
+        legend([{color: "#4ade80", label: "\u22657h"}, {color: "#a855f7", label: "5-7h"}, {color: "#f87171", label: "<5h"}])
+      ], "wide");
+      app.appendChild(chartCard);
+    }
+  }
+
+  function renderActivity() {
+    var period = D.period || {};
+    var avg = D.averages || {};
+    var daily = D.daily || [];
+
+    app.appendChild(el("h1", {textContent: "Activity Dashboard"}));
+    app.appendChild(el("div", {className: "subtitle", textContent: (period.from || "?") + "  to  " + (period.to || "?") + "  \u00b7  " + (D.days_analyzed || 0) + " days"}));
+
+    var grid = el("div", {className: "grid"});
+
+    // Average steps
+    var stepsAvg = safeGet(avg, "steps");
+    var stepsDir = stepsAvg != null ? (stepsAvg >= 8000 ? "up" : stepsAvg >= 5000 ? "neutral" : "down") : "neutral";
+    grid.appendChild(card("Avg Daily Steps", [bigNum(fmt(stepsAvg, 0), "steps", stepsDir, stepsAvg >= 8000 ? "active" : stepsAvg >= 5000 ? "moderate" : "low")]));
+
+    // Average active kcal
+    grid.appendChild(card("Avg Active Calories", [bigNum(fmt(safeGet(avg, "active_kcal"), 0), "kcal")]));
+
+    // Average exercise
+    grid.appendChild(card("Avg Exercise", [bigNum(fmt(safeGet(avg, "exercise_min"), 0), "min/day")]));
+
+    // Average distance
+    grid.appendChild(card("Avg Distance", [bigNum(fmt(safeGet(avg, "distance_km"), 1), "km")]));
+
+    app.appendChild(grid);
+
+    // Daily steps bar chart
+    if (daily.length > 0) {
+      app.appendChild(el("h2", {textContent: "Daily Steps"}));
+      var stepBars = daily.map(function(d) {
+        var s = d.steps || 0;
+        var color = s >= 10000 ? "#4ade80" : s >= 5000 ? "#6366f1" : "#f87171";
+        return {value: s, color: color, tip: d.date + ": " + fmt(s, 0)};
+      });
+      app.appendChild(card(null, [barChart(stepBars, {tall: true}),
+        legend([{color: "#4ade80", label: "\u226510k"}, {color: "#6366f1", label: "5-10k"}, {color: "#f87171", label: "<5k"}])
+      ], "wide"));
+
+      // Exercise minutes bar chart
+      app.appendChild(el("h2", {textContent: "Daily Exercise Minutes"}));
+      var exBars = daily.map(function(d) {
+        var m = d.exercise_min || 0;
+        var color = m >= 30 ? "#4ade80" : m >= 15 ? "#fbbf24" : "#64748b";
+        return {value: m, color: color, tip: d.date + ": " + fmt(m, 0) + " min"};
+      });
+      app.appendChild(card(null, [barChart(exBars, {tall: true}),
+        legend([{color: "#4ade80", label: "\u226530min"}, {color: "#fbbf24", label: "15-30min"}, {color: "#64748b", label: "<15min"}])
+      ], "wide"));
+    }
+  }
+
+  function renderHeart() {
+    var period = D.period || {};
+    app.appendChild(el("h1", {textContent: "Heart Health"}));
+    app.appendChild(el("div", {className: "subtitle", textContent: (period.from || "?") + "  to  " + (period.to || "?")}));
+
+    var grid = el("div", {className: "grid"});
+
+    // Resting HR
+    var avgRhr = safeGet(D, "avg_resting_hr");
+    var rhrDir = avgRhr != null ? (avgRhr <= 60 ? "up" : avgRhr <= 70 ? "neutral" : "warn") : "neutral";
+    grid.appendChild(card("Resting Heart Rate", [bigNum(fmt(avgRhr, 0), "bpm", rhrDir, avgRhr <= 60 ? "athletic" : avgRhr <= 70 ? "normal" : "elevated")]));
+
+    // HRV
+    var avgHrv = safeGet(D, "avg_hrv");
+    var hrvDir = avgHrv != null ? (avgHrv >= 50 ? "up" : avgHrv >= 30 ? "neutral" : "down") : "neutral";
+    grid.appendChild(card("Heart Rate Variability", [bigNum(fmt(avgHrv, 0), "ms", hrvDir, avgHrv >= 50 ? "good" : avgHrv >= 30 ? "moderate" : "low")]));
+
+    // Walking HR
+    var avgWhr = safeGet(D, "avg_walking_hr");
+    if (avgWhr != null) {
+      grid.appendChild(card("Walking Heart Rate", [bigNum(fmt(avgWhr, 0), "bpm")]));
+    }
+
+    app.appendChild(grid);
+
+    // Weekly RHR line chart
+    var weeklyRhr = D.weekly_resting_hr || [];
+    if (weeklyRhr.length > 1) {
+      app.appendChild(el("h2", {textContent: "Weekly Resting HR Trend"}));
+      var rhrPts = weeklyRhr.map(function(w){return {value: w.avg, label: w.week}});
+      app.appendChild(card(null, [lineChart(rhrPts, {color: "#f87171"})], "wide"));
+    }
+
+    // Weekly HRV line chart
+    var weeklyHrv = D.weekly_hrv || [];
+    if (weeklyHrv.length > 1) {
+      app.appendChild(el("h2", {textContent: "Weekly HRV Trend"}));
+      var hrvPts = weeklyHrv.map(function(w){return {value: w.avg, label: w.week}});
+      app.appendChild(card(null, [lineChart(hrvPts, {color: "#6366f1"})], "wide"));
+    }
+  }
+
+  function renderCorrelate() {
+    app.appendChild(el("h1", {textContent: "Correlation Analysis"}));
+    var period = D.period || {};
+    app.appendChild(el("div", {className: "subtitle", textContent: "Target: " + (D.target || "?") + "  \u00b7  " + (period.from || "?") + " to " + (period.to || "?")}));
+
+    var corrs = D.correlations || [];
+    if (corrs.length === 0) {
+      app.appendChild(card("No significant correlations found", [el("div", {textContent: "Try a longer period or different target metric."})]));
+      return;
+    }
+
+    var tbl = el("table", {className: "data-table"});
+    tbl.appendChild(el("thead", {}, [el("tr", {}, [
+      el("th", {textContent: "Metric A"}), el("th", {textContent: "Metric B"}),
+      el("th", {textContent: "Lag"}), el("th", {textContent: "r"}),
+      el("th", {textContent: "p"}), el("th", {textContent: "n"})
+    ])]));
+    var tbody = el("tbody");
+    corrs.forEach(function(c) {
+      var absR = Math.abs(c.r);
+      var cls = absR > 0.5 ? "r-strong" : absR > 0.3 ? "r-moderate" : "r-weak";
+      tbody.appendChild(el("tr", {}, [
+        el("td", {textContent: (c.metric_a || "").replace(/-/g, " ")}),
+        el("td", {textContent: (c.metric_b || "").replace(/-/g, " ")}),
+        el("td", {textContent: c.lag + " day" + (c.lag !== 1 ? "s" : "")}),
+        el("td", {className: cls, textContent: fmt(c.r, 3)}),
+        el("td", {textContent: fmt(c.p, 4)}),
+        el("td", {textContent: c.n})
+      ]));
+    });
+    tbl.appendChild(tbody);
+    app.appendChild(card(null, [tbl], "wide"));
+  }
+
+  function renderCompare() {
+    app.appendChild(el("h1", {textContent: "Period Comparison"}));
+    app.appendChild(el("div", {className: "subtitle", textContent: (D.p1 || "?") + "  vs  " + (D.p2 || "?")}));
+
+    var metrics = D.metrics || [];
+    if (metrics.length === 0) {
+      app.appendChild(card("No common metrics found", [el("div", {textContent: "The two periods have no overlapping metrics."})]));
+      return;
+    }
+
+    var grid = el("div", {className: "grid"});
+    metrics.forEach(function(m) {
+      var c = el("div", {className: "card"});
+      c.appendChild(el("h3", {textContent: (m.name || "").replace(/-/g, " ")}));
+
+      var row = el("div", {style: {display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px"}});
+
+      var p1Box = el("div");
+      p1Box.appendChild(el("div", {className: "label", textContent: D.p1 || "Period 1"}));
+      p1Box.appendChild(el("div", {style: {fontSize: "1.4rem", fontWeight: "700", color: "#fff"}, textContent: fmt(m.p1_avg, 1)}));
+      p1Box.appendChild(el("div", {style: {fontSize: ".75rem", color: "#778"}, textContent: m.p1_days + " days"}));
+
+      var arrow = el("div", {style: {fontSize: "1.4rem", color: "#556"}, textContent: "\u2192"});
+
+      var p2Box = el("div", {style: {textAlign: "right"}});
+      p2Box.appendChild(el("div", {className: "label", textContent: D.p2 || "Period 2"}));
+      p2Box.appendChild(el("div", {style: {fontSize: "1.4rem", fontWeight: "700", color: "#fff"}, textContent: fmt(m.p2_avg, 1)}));
+      p2Box.appendChild(el("div", {style: {fontSize: ".75rem", color: "#778"}, textContent: m.p2_days + " days"}));
+
+      row.appendChild(p1Box);
+      row.appendChild(arrow);
+      row.appendChild(p2Box);
+      c.appendChild(row);
+
+      // Delta badge
+      if (m.delta_pct != null) {
+        var sign = m.delta_pct > 0 ? "+" : "";
+        var cls = m.delta_pct > 0 ? "pos" : m.delta_pct < 0 ? "neg" : "zero";
+        c.appendChild(el("span", {className: "delta " + cls, textContent: sign + fmt(m.delta_pct, 1) + "%"}));
+      }
+
+      grid.appendChild(c);
+    });
+    app.appendChild(grid);
+  }
+
+  function renderYearly() {
+    var year = D.year || "?";
+    var monthly = D.monthly || [];
+    var bests = D.bests || {};
+    var worsts = D.worsts || {};
+
+    app.appendChild(el("h1", {textContent: year + " Year in Review"}));
+    app.appendChild(el("div", {className: "subtitle", textContent: "Annual health summary"}));
+
+    // Highlights grid
+    var hlGrid = el("div", {className: "grid"});
+    if (bests.highest_step_day) {
+      hlGrid.appendChild(card("Best Step Day", [
+        bigNum(fmt(bests.highest_step_day.value, 0), "steps", "up", "record"),
+        el("div", {className: "label", style: {marginTop: "4px"}, textContent: bests.highest_step_day.date})
+      ]));
+    }
+    if (bests.longest_sleep) {
+      hlGrid.appendChild(card("Longest Sleep", [
+        bigNum(fmt(bests.longest_sleep.value), "hrs", "up", "best"),
+        el("div", {className: "label", style: {marginTop: "4px"}, textContent: bests.longest_sleep.date})
+      ]));
+    }
+    if (bests.lowest_resting_hr) {
+      hlGrid.appendChild(card("Lowest Resting HR", [
+        bigNum(fmt(bests.lowest_resting_hr.value, 0), "bpm", "up", "best"),
+        el("div", {className: "label", style: {marginTop: "4px"}, textContent: bests.lowest_resting_hr.date})
+      ]));
+    }
+    if (bests.highest_hrv) {
+      hlGrid.appendChild(card("Highest HRV", [
+        bigNum(fmt(bests.highest_hrv.value, 0), "ms", "up", "best"),
+        el("div", {className: "label", style: {marginTop: "4px"}, textContent: bests.highest_hrv.date})
+      ]));
+    }
+    if (worsts.shortest_sleep) {
+      hlGrid.appendChild(card("Shortest Sleep", [
+        bigNum(fmt(worsts.shortest_sleep.value), "hrs", "down", "worst"),
+        el("div", {className: "label", style: {marginTop: "4px"}, textContent: worsts.shortest_sleep.date})
+      ]));
+    }
+    if (worsts.highest_resting_hr) {
+      hlGrid.appendChild(card("Highest Resting HR", [
+        bigNum(fmt(worsts.highest_resting_hr.value, 0), "bpm", "down", "worst"),
+        el("div", {className: "label", style: {marginTop: "4px"}, textContent: worsts.highest_resting_hr.date})
+      ]));
+    }
+    app.appendChild(hlGrid);
+
+    // Monthly charts — only show months that have data
+    var hasData = monthly.filter(function(m){return m.days_with_data > 0});
+    if (hasData.length === 0) return;
+
+    // Monthly steps
+    var stepsData = monthly.filter(function(m){return m.steps_avg != null});
+    if (stepsData.length > 0) {
+      app.appendChild(el("h2", {textContent: "Monthly Steps"}));
+      var stepBars = monthly.map(function(m) {
+        var v = m.steps_avg || 0;
+        var label = m.month ? m.month.split("-")[1] : "?";
+        var color = v >= 8000 ? "#4ade80" : v >= 5000 ? "#6366f1" : v > 0 ? "#f87171" : "#222";
+        return {value: v, color: color, tip: m.month + ": " + fmt(v, 0) + " steps/day"};
+      });
+      app.appendChild(card(null, [barChart(stepBars, {tall: true})], "wide"));
+    }
+
+    // Monthly sleep
+    var sleepData = monthly.filter(function(m){return m.sleep_avg_hrs != null});
+    if (sleepData.length > 0) {
+      app.appendChild(el("h2", {textContent: "Monthly Sleep"}));
+      var sleepBars = monthly.map(function(m) {
+        var v = m.sleep_avg_hrs || 0;
+        var color = v >= 7 ? "#4ade80" : v >= 5 ? "#a855f7" : v > 0 ? "#f87171" : "#222";
+        return {value: v, color: color, tip: m.month + ": " + fmt(v) + " hrs"};
+      });
+      app.appendChild(card(null, [barChart(sleepBars, {tall: true, max: 10})], "wide"));
+    }
+
+    // Monthly resting HR
+    var rhrData = monthly.filter(function(m){return m.resting_hr_avg != null});
+    if (rhrData.length > 0) {
+      app.appendChild(el("h2", {textContent: "Monthly Resting HR"}));
+      var rhrPts = monthly.filter(function(m){return m.resting_hr_avg != null}).map(function(m){
+        return {value: m.resting_hr_avg, label: m.month};
+      });
+      app.appendChild(card(null, [lineChart(rhrPts, {color: "#f87171"})], "wide"));
+    }
+  }
+
+  // --- Dispatch ---
+  var renderers = {
+    scan: renderScan,
+    sleep: renderSleep,
+    activity: renderActivity,
+    heart: renderHeart,
+    correlate: renderCorrelate,
+    compare: renderCompare,
+    yearly: renderYearly
+  };
+
+  if (renderers[MODE]) {
+    try { renderers[MODE](); }
+    catch(e) { app.appendChild(el("div", {style: {color: "#f87171", padding: "20px"}, textContent: "Render error: " + e.message})); }
+  } else {
+    app.appendChild(el("div", {style: {color: "#fbbf24", padding: "20px"}, textContent: "Unknown mode: " + MODE}));
+  }
+})();
+</script>
+</body>
+</html>
