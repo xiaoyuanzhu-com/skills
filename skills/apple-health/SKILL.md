@@ -82,6 +82,7 @@ python3 <skill_dir>/scripts/analyze.py <data_dir> --mode=<mode> [options]
 | `correlate` | "What affects my X?", relationships between metrics | `--target=metric --lag=0,1,2,3` |
 | `compare` | "Compare month X to month Y" | `--p1=YYYY-MM --p2=YYYY-MM` |
 | `yearly` | Year in review, annual summary | `--year=YYYY` |
+| `report` | Premium health assessment, "give me the full picture" | `--period=30d` or `--from/--to` |
 
 ### 3. visualize.py — Generate dashboards
 
@@ -123,6 +124,23 @@ Example opening:
 >
 > Want me to dig into any of these?"
 
+### Phase 2b: Premium Report
+
+When the user wants a comprehensive assessment (not just a scan):
+
+1. Run `analyze.py --mode=report --period=30d` (or `90d` for more data)
+2. Pipe through `visualize.py --mode=report`
+3. Present the full HTML report
+
+This generates a single scrollable document with:
+- Executive summary with radar chart and category scores
+- Deep-dive sections: Sleep, Heart, Activity, Respiratory, Mobility
+- 14+ chart types (radar, heatmap, scatter, histogram, etc.)
+- Advanced statistics (percentiles, rolling averages, trend regression)
+- Educational knowledge panels per section
+- Correlation matrix and top interconnections
+- Methodology and disclaimers
+
 ### Phase 3: Drill-Down
 
 Based on what the user asks, run the appropriate mode:
@@ -134,6 +152,8 @@ Based on what the user asks, run the appropriate mode:
 | "Compare this month to last" | `--mode=compare --p1=YYYY-MM --p2=YYYY-MM` |
 | "What affects my HRV?" | `--mode=correlate --target=heart-rate-variability-sdnn` |
 | "2025 year in review" | `--mode=yearly --year=2025` |
+| "Full health report" | `--mode=report --period=30d` |
+| "Give me everything" | `--mode=report --period=90d` |
 
 Present each result with:
 1. **A visual** (HTML dashboard or inline chart)
