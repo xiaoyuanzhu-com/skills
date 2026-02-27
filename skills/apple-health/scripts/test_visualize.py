@@ -221,6 +221,110 @@ YEARLY_DATA = {
     },
 }
 
+REPORT_DATA = {
+    "period": {"from": "2026-01-01", "to": "2026-01-30"},
+    "executive_summary": {
+        "categories": [
+            {"name": "Sleep", "score": 3.5, "trend": "flat",
+             "summary_value": 7.2, "unit": "hrs avg",
+             "sparkline": [7.0, 7.5, 6.8, 7.2, 7.4, 7.1]},
+            {"name": "Daily Steps", "score": 4.0, "trend": "up",
+             "summary_value": 9200, "unit": "avg",
+             "sparkline": [8000, 9000, 10000, 9500, 8500, 9200]},
+        ]
+    },
+    "sleep": {
+        "duration_stats": {
+            "n": 30, "mean": 7.2, "median": 7.3, "stdev": 0.8,
+            "cv": 0.11, "percentiles": {"p10": 6.0, "p25": 6.5, "p75": 7.8, "p90": 8.2},
+            "min": {"value": 4.5, "date": "2026-01-15"},
+            "max": {"value": 9.1, "date": "2026-01-08"},
+            "dates": ["2026-01-01", "2026-01-02"], "values": [7.0, 7.5],
+            "rolling_7d": [None, 7.1],
+            "rolling_30d": [], "trend_slope": 0.01, "trend_direction": "flat",
+            "day_of_week": {"Mon": 7.0, "Tue": 7.2, "Wed": 7.1, "Thu": 7.3,
+                            "Fri": 6.8, "Sat": 7.5, "Sun": 7.4},
+            "distribution": [{"from": 4.5, "to": 5.4, "count": 2}],
+            "period_comparison": {"first_half_avg": 7.0, "second_half_avg": 7.4, "change_pct": 5.7}
+        },
+        "stage_averages": {"total_hrs": 7.2, "deep_pct": 17.5, "core_pct": 55.0, "rem_pct": 25.0, "awake_min": 12.0},
+        "stage_trends": {"deep_pcts": [18, 17], "core_pcts": [55, 54], "rem_pcts": [25, 26]},
+        "nightly": [{"date": "2026-01-01", "total_hrs": 7.0, "deep_pct": 18.0, "core_pct": 55.0, "rem_pct": 25.0, "awake_min": 10.0, "bedtime_local": "2026-01-01T23:15:00", "waketime_local": "2026-01-02T06:15:00"}],
+        "bedtime_stats": {"stdev_minutes": 38.5, "values_minutes": [1395, 1410]},
+        "nights_analyzed": 30
+    },
+    "heart": {
+        "resting_hr_stats": {
+            "n": 30, "mean": 58.5, "median": 58.0, "stdev": 3.2, "cv": 0.05,
+            "percentiles": {"p10": 54, "p25": 56, "p75": 61, "p90": 63},
+            "min": {"value": 52, "date": "2026-01-10"}, "max": {"value": 66, "date": "2026-01-20"},
+            "dates": ["2026-01-01"], "values": [58],
+            "rolling_7d": [None], "rolling_30d": [],
+            "trend_slope": 0.05, "trend_direction": "flat",
+            "day_of_week": {"Mon": 58, "Tue": 57, "Wed": 59, "Thu": 58, "Fri": 59, "Sat": 57, "Sun": 58},
+            "distribution": [{"from": 52, "to": 55, "count": 5}],
+            "period_comparison": {"first_half_avg": 57.5, "second_half_avg": 59.5, "change_pct": 3.5}
+        },
+        "hrv_stats": {
+            "n": 30, "mean": 45.2, "median": 44.0, "stdev": 8.5, "cv": 0.19,
+            "percentiles": {"p10": 34, "p25": 38, "p75": 52, "p90": 56},
+            "min": {"value": 28, "date": "2026-01-15"}, "max": {"value": 62, "date": "2026-01-05"},
+            "dates": ["2026-01-01"], "values": [45],
+            "rolling_7d": [None], "rolling_30d": [],
+            "trend_slope": -0.1, "trend_direction": "down",
+            "day_of_week": {"Mon": 44, "Tue": 46, "Wed": 45, "Thu": 43, "Fri": 44, "Sat": 47, "Sun": 46},
+            "distribution": [{"from": 28, "to": 32, "count": 3}],
+            "period_comparison": {"first_half_avg": 47, "second_half_avg": 43, "change_pct": -8.5}
+        },
+        "hr_hrv_scatter": [{"date": "2026-01-01", "rhr": 58, "hrv": 45}],
+        "weekly_resting_hr": [{"week": "2026-W01", "avg": 58.0, "n": 7}],
+        "weekly_hrv": [{"week": "2026-W01", "avg": 45.0, "n": 7}]
+    },
+    "activity": {
+        "steps_stats": {
+            "n": 30, "mean": 9200, "median": 9000, "stdev": 3200, "cv": 0.35,
+            "percentiles": {"p10": 4500, "p25": 6800, "p75": 11500, "p90": 13800},
+            "min": {"value": 1200, "date": "2026-01-14"}, "max": {"value": 18000, "date": "2026-01-22"},
+            "dates": ["2026-01-01"], "values": [9200],
+            "rolling_7d": [None], "rolling_30d": [],
+            "trend_slope": 50, "trend_direction": "up",
+            "day_of_week": {"Mon": 9500, "Tue": 10000, "Wed": 9200, "Thu": 8800, "Fri": 8500, "Sat": 10500, "Sun": 7900},
+            "distribution": [{"from": 1200, "to": 2900, "count": 2}],
+            "period_comparison": {"first_half_avg": 8500, "second_half_avg": 9900, "change_pct": 16.5},
+            "streak_7k": 8
+        },
+        "exercise_stats": {
+            "n": 30, "mean": 28.5, "median": 30.0, "stdev": 15.0, "cv": 0.53,
+            "percentiles": {"p10": 0, "p25": 15, "p75": 42, "p90": 50},
+            "min": {"value": 0, "date": "2026-01-07"}, "max": {"value": 65, "date": "2026-01-18"},
+            "dates": ["2026-01-01"], "values": [30],
+            "rolling_7d": [None], "rolling_30d": [],
+            "trend_slope": 0.3, "trend_direction": "flat",
+            "day_of_week": {"Mon": 35, "Tue": 30, "Wed": 25, "Thu": 32, "Fri": 20, "Sat": 38, "Sun": 15},
+            "distribution": [{"from": 0, "to": 7, "count": 4}],
+            "period_comparison": {"first_half_avg": 26, "second_half_avg": 31, "change_pct": 19.2},
+            "streak_any": 12
+        },
+        "energy_stats": {
+            "n": 30, "mean": 380, "median": 370, "stdev": 95, "cv": 0.25,
+            "percentiles": {"p10": 250, "p25": 310, "p75": 440, "p90": 510},
+            "min": {"value": 180, "date": "2026-01-14"}, "max": {"value": 620, "date": "2026-01-22"},
+            "dates": ["2026-01-01"], "values": [380],
+            "rolling_7d": [None], "rolling_30d": [],
+            "trend_slope": 2.0, "trend_direction": "up",
+            "day_of_week": {"Mon": 400, "Tue": 390, "Wed": 370, "Thu": 380, "Fri": 350, "Sat": 420, "Sun": 340},
+            "distribution": [{"from": 180, "to": 224, "count": 2}],
+            "period_comparison": {"first_half_avg": 350, "second_half_avg": 410, "change_pct": 17.1}
+        }
+    },
+    "interconnections": {
+        "matrix": [{"metric": "step-count", "values": {"step-count": 1.0, "resting-heart-rate": -0.3}}],
+        "metric_names": ["step-count", "resting-heart-rate"],
+        "top_correlations": [{"metric_a": "step-count", "metric_b": "active-energy-burned", "r": 0.91, "p": 0.0001, "n": 30}]
+    },
+    "methodology": {"metrics_analyzed": 8, "days_in_period": 30, "generated_at": "2026-01-30"}
+}
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -307,6 +411,7 @@ class TestModeInjected(unittest.TestCase):
             ("correlate", CORRELATE_DATA),
             ("compare", COMPARE_DATA),
             ("yearly", YEARLY_DATA),
+            ("report", REPORT_DATA),
         ]:
             with self.subTest(mode=mode):
                 stdout, stderr, rc = _run_visualize(data, mode)
@@ -383,6 +488,25 @@ class TestYearlyOutput(unittest.TestCase):
         self.assertIn("<html", stdout)
         self.assertIn("2025", stdout)
         self.assertIn("18432", stdout)
+
+
+class TestReportOutput(unittest.TestCase):
+    """Report mode produces valid HTML with premium report data."""
+
+    def test_report_html_generated(self):
+        stdout, stderr, rc = _run_visualize(REPORT_DATA, "report")
+        self.assertEqual(rc, 0, f"visualize.py failed: {stderr}")
+        self.assertIn("<!DOCTYPE html>", stdout)
+        self.assertIn("window.__DATA__", stdout)
+        self.assertIn('"report"', stdout)
+
+    def test_report_contains_sections(self):
+        stdout, _, rc = _run_visualize(REPORT_DATA, "report")
+        self.assertEqual(rc, 0)
+        self.assertIn("executive_summary", stdout)
+        self.assertIn("7.2", stdout)
+        self.assertIn("58.5", stdout)
+        self.assertIn("9200", stdout)
 
 
 class TestErrorHandling(unittest.TestCase):

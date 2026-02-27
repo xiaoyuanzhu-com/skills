@@ -5,7 +5,7 @@ Takes a JSON file produced by analyze.py and renders a self-contained HTML
 dashboard by injecting the data into a template.
 
 Usage:
-    python3 visualize.py <input.json> --mode scan|sleep|activity|heart|correlate|compare|yearly
+    python3 visualize.py <input.json> --mode scan|sleep|activity|heart|correlate|compare|yearly|report
 
 Output: HTML to stdout.
 
@@ -20,7 +20,7 @@ import json
 import os
 import sys
 
-VALID_MODES = ("scan", "sleep", "activity", "heart", "correlate", "compare", "yearly")
+VALID_MODES = ("scan", "sleep", "activity", "heart", "correlate", "compare", "yearly", "report")
 
 
 def build_html(data, mode, template_path=None):
@@ -35,12 +35,15 @@ def build_html(data, mode, template_path=None):
         Complete HTML string ready to be written/served.
     """
     if template_path is None:
-        template_path = os.path.join(
+        assets = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
             "..",
             "assets",
-            "dashboard-template.html",
         )
+        if mode == "report":
+            template_path = os.path.join(assets, "premium-report-template.html")
+        else:
+            template_path = os.path.join(assets, "dashboard-template.html")
 
     with open(template_path, "r") as f:
         template = f.read()
