@@ -64,6 +64,17 @@ MEAN_METRICS = {
     "blood-pressure-systolic",
     "blood-pressure-diastolic",
     "heart-rate",
+    "body-mass",
+    "body-fat-percentage",
+    "body-mass-index",
+    "lean-body-mass",
+    "vo2-max",
+    "apple-sleeping-wrist-temperature",
+    "stair-ascent-speed",
+    "stair-descent-speed",
+    "walking-double-support-percentage",
+    "walking-asymmetry-percentage",
+    "apple-walking-steadiness",
 }
 
 # Common IANA timezone offsets (hours from UTC).
@@ -1299,6 +1310,46 @@ def _score_category(stats):
     return max(1.0, min(5.0, round(score, 1)))
 
 
+def _build_vitals_section(data_dir, from_date, to_date):
+    """Build vitals section (blood pressure). Returns None if no data."""
+    sys_data = aggregate_metric(data_dir, "blood-pressure-systolic", from_date, to_date)
+    dia_data = aggregate_metric(data_dir, "blood-pressure-diastolic", from_date, to_date)
+    if not sys_data and not dia_data:
+        return None
+    result = {}
+    if sys_data:
+        result["systolic_stats"] = _build_metric_stats(sys_data)
+    if dia_data:
+        result["diastolic_stats"] = _build_metric_stats(dia_data)
+    # Paired readings for scatter plot
+    paired = []
+    for d in sys_data:
+        if d in dia_data:
+            paired.append({"date": str(d), "systolic": sys_data[d], "diastolic": dia_data[d]})
+    result["paired_readings"] = paired
+    return result
+
+
+def _build_body_section(data_dir, from_date, to_date):
+    """Build body composition section. Returns None if no data."""
+    mass_data = aggregate_metric(data_dir, "body-mass", from_date, to_date)
+    fat_data = aggregate_metric(data_dir, "body-fat-percentage", from_date, to_date)
+    bmi_data = aggregate_metric(data_dir, "body-mass-index", from_date, to_date)
+    lean_data = aggregate_metric(data_dir, "lean-body-mass", from_date, to_date)
+    if not mass_data and not fat_data:
+        return None
+    result = {}
+    if mass_data:
+        result["mass_stats"] = _build_metric_stats(mass_data)
+    if fat_data:
+        result["body_fat_stats"] = _build_metric_stats(fat_data)
+    if bmi_data:
+        result["bmi_stats"] = _build_metric_stats(bmi_data)
+    if lean_data:
+        result["lean_mass_stats"] = _build_metric_stats(lean_data)
+    return result
+
+
 def _build_sleep_section(data_dir, from_date, to_date):
     """Build the sleep section of the report."""
     sleep_data = mode_sleep(data_dir, from_date, to_date)
@@ -1334,7 +1385,7 @@ def _build_sleep_section(data_dir, from_date, to_date):
     duration_stats = _build_metric_stats(duration_dict)
     bedtime_stdev = _stdev(bedtime_minutes) if bedtime_minutes else None
 
-    return {
+    result = {
         "duration_stats": duration_stats,
         "stage_averages": sleep_data.get("averages", {}),
         "stage_trends": {
@@ -1349,6 +1400,12 @@ def _build_sleep_section(data_dir, from_date, to_date):
         },
         "nights_analyzed": sleep_data.get("nights_analyzed", 0),
     }
+
+    wrist_temp_data = aggregate_metric(data_dir, "apple-sleeping-wrist-temperature", from_date, to_date)
+    if wrist_temp_data:
+        result["wrist_temp_stats"] = _build_metric_stats(wrist_temp_data)
+
+    return result
 
 
 def _build_heart_section(data_dir, from_date, to_date):
@@ -1378,6 +1435,14 @@ def _build_heart_section(data_dir, from_date, to_date):
     result["weekly_resting_hr"] = heart_data.get("weekly_resting_hr", [])
     result["weekly_hrv"] = heart_data.get("weekly_hrv", [])
 
+    vo2_data = aggregate_metric(data_dir, "vo2-max", from_date, to_date)
+    if vo2_data:
+        result["vo2_max_stats"] = _build_metric_stats(vo2_data)
+
+    hr_data = aggregate_metric(data_dir, "heart-rate", from_date, to_date)
+    if hr_data:
+        result["daily_hr_stats"] = _build_metric_stats(hr_data)
+
     return result
 
 
@@ -1402,6 +1467,18 @@ def _build_activity_section(data_dir, from_date, to_date):
 
     result["steps_stats"]["streak_7k"] = _longest_streak(steps_data, 7000)
     result["exercise_stats"]["streak_any"] = _longest_streak(exercise_data, 1)
+
+    flights_data = aggregate_metric(data_dir, "flights-climbed", from_date, to_date)
+    if flights_data:
+        result["flights_stats"] = _build_metric_stats(flights_data)
+
+    stand_data = aggregate_metric(data_dir, "apple-stand-time", from_date, to_date)
+    if stand_data:
+        result["stand_time_stats"] = _build_metric_stats(stand_data)
+
+    basal_data = aggregate_metric(data_dir, "basal-energy-burned", from_date, to_date)
+    if basal_data:
+        result["basal_energy_stats"] = _build_metric_stats(basal_data)
 
     return result
 
@@ -1434,6 +1511,23 @@ def _build_mobility_section(data_dir, from_date, to_date):
         result["step_length_stats"] = _build_metric_stats(sl_data)
     if asym_data:
         result["asymmetry_stats"] = _build_metric_stats(asym_data)
+
+    asc_data = aggregate_metric(data_dir, "stair-ascent-speed", from_date, to_date)
+    if asc_data:
+        result["stair_ascent_stats"] = _build_metric_stats(asc_data)
+
+    desc_data = aggregate_metric(data_dir, "stair-descent-speed", from_date, to_date)
+    if desc_data:
+        result["stair_descent_stats"] = _build_metric_stats(desc_data)
+
+    dbl_data = aggregate_metric(data_dir, "walking-double-support-percentage", from_date, to_date)
+    if dbl_data:
+        result["double_support_stats"] = _build_metric_stats(dbl_data)
+
+    steady_data = aggregate_metric(data_dir, "apple-walking-steadiness", from_date, to_date)
+    if steady_data:
+        result["steadiness_stats"] = _build_metric_stats(steady_data)
+
     return result
 
 
@@ -1486,6 +1580,8 @@ def _build_interconnections(data_dir, from_date, to_date):
 
 def mode_report(data_dir, from_date, to_date):
     """Premium health assessment report — all sections in one pass."""
+    vitals = _build_vitals_section(data_dir, from_date, to_date)
+    body = _build_body_section(data_dir, from_date, to_date)
     sleep = _build_sleep_section(data_dir, from_date, to_date)
     heart = _build_heart_section(data_dir, from_date, to_date)
     activity = _build_activity_section(data_dir, from_date, to_date)
@@ -1575,9 +1671,39 @@ def mode_report(data_dir, from_date, to_date):
             "unit": "m/s avg",
             "sparkline": ws["values"][-14:],
         })
+    if heart and heart.get("vo2_max_stats") and heart["vo2_max_stats"]["n"] > 0:
+        v2 = heart["vo2_max_stats"]
+        categories.append({
+            "name": "VO2 Max",
+            "score": _score_category(v2),
+            "trend": v2["trend_direction"],
+            "summary_value": v2["mean"],
+            "unit": "mL/kg/min",
+            "sparkline": v2["values"][-14:],
+        })
+    if body and body.get("mass_stats") and body["mass_stats"]["n"] > 0:
+        bm = body["mass_stats"]
+        categories.append({
+            "name": "Body Mass",
+            "score": _score_category(bm),
+            "trend": bm["trend_direction"],
+            "summary_value": bm["mean"],
+            "unit": "kg avg",
+            "sparkline": bm["values"][-14:],
+        })
+    if vitals and vitals.get("systolic_stats") and vitals["systolic_stats"]["n"] > 0:
+        bp = vitals["systolic_stats"]
+        categories.append({
+            "name": "Blood Pressure",
+            "score": _score_category(bp),
+            "trend": bp["trend_direction"],
+            "summary_value": bp["mean"],
+            "unit": "mmHg sys",
+            "sparkline": bp["values"][-14:],
+        })
 
     metrics_found = 0
-    for section_data in [sleep, heart, activity, respiratory, mobility]:
+    for section_data in [vitals, body, sleep, heart, activity, respiratory, mobility]:
         if section_data:
             for key, val in section_data.items():
                 if isinstance(val, dict) and "n" in val and val["n"] > 0:
@@ -1597,6 +1723,10 @@ def mode_report(data_dir, from_date, to_date):
         },
     }
 
+    if vitals:
+        result["vitals"] = vitals
+    if body:
+        result["body"] = body
     if respiratory:
         result["respiratory"] = respiratory
     if mobility:

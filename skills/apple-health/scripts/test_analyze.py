@@ -1191,6 +1191,150 @@ class TestReportMode(BaseTestCase):
         self.assertIn("metrics_analyzed", meth)
         self.assertIn("days_in_period", meth)
 
+    def test_vitals_section_absent_when_no_data(self):
+        """Vitals section should not be in result if no BP data."""
+        from analyze import mode_report
+        import datetime
+        result = mode_report(self.tmpdir,
+                             datetime.date(2026, 1, 1),
+                             datetime.date(2026, 1, 30))
+        # Test data doesn't include BP, so vitals should not be present
+        self.assertNotIn("vitals", result)
+
+    def test_body_section_absent_when_no_data(self):
+        """Body section should not be in result if no body comp data."""
+        from analyze import mode_report
+        import datetime
+        result = mode_report(self.tmpdir,
+                             datetime.date(2026, 1, 1),
+                             datetime.date(2026, 1, 30))
+        self.assertNotIn("body", result)
+
+    def test_vitals_section_present_with_bp_data(self):
+        """Vitals section should appear when BP data is present."""
+        import datetime
+        import random
+        random.seed(99)
+        for i in range(5):
+            d = datetime.date(2026, 1, 10) + datetime.timedelta(days=i)
+            _write_metric(self.tmpdir, d, "blood-pressure-systolic",
+                [_quantity_sample(
+                    f"{d}T08:00:00+00:00", f"{d}T08:00:00+00:00",
+                    random.randint(110, 130), "Watch", "Watch", "mmHg",
+                    "HKQuantityTypeIdentifierBloodPressureSystolic"
+                )], "Asia/Shanghai",
+                "HKQuantityTypeIdentifierBloodPressureSystolic", "mmHg")
+            _write_metric(self.tmpdir, d, "blood-pressure-diastolic",
+                [_quantity_sample(
+                    f"{d}T08:00:00+00:00", f"{d}T08:00:00+00:00",
+                    random.randint(70, 85), "Watch", "Watch", "mmHg",
+                    "HKQuantityTypeIdentifierBloodPressureDiastolic"
+                )], "Asia/Shanghai",
+                "HKQuantityTypeIdentifierBloodPressureDiastolic", "mmHg")
+        from analyze import mode_report
+        result = mode_report(self.tmpdir,
+                             datetime.date(2026, 1, 1),
+                             datetime.date(2026, 1, 30))
+        self.assertIn("vitals", result)
+        vitals = result["vitals"]
+        self.assertIn("systolic_stats", vitals)
+        self.assertIn("diastolic_stats", vitals)
+        self.assertIn("paired_readings", vitals)
+        self.assertEqual(len(vitals["paired_readings"]), 5)
+
+    def test_body_section_present_with_mass_data(self):
+        """Body section should appear when body mass data is present."""
+        import datetime
+        import random
+        random.seed(100)
+        for i in range(10):
+            d = datetime.date(2026, 1, 5) + datetime.timedelta(days=i)
+            _write_metric(self.tmpdir, d, "body-mass",
+                [_quantity_sample(
+                    f"{d}T07:00:00+00:00", f"{d}T07:00:00+00:00",
+                    round(random.uniform(70, 75), 1), "Scale", "Scale", "kg",
+                    "HKQuantityTypeIdentifierBodyMass"
+                )], "Asia/Shanghai",
+                "HKQuantityTypeIdentifierBodyMass", "kg")
+        from analyze import mode_report
+        result = mode_report(self.tmpdir,
+                             datetime.date(2026, 1, 1),
+                             datetime.date(2026, 1, 30))
+        self.assertIn("body", result)
+        body = result["body"]
+        self.assertIn("mass_stats", body)
+        self.assertEqual(body["mass_stats"]["n"], 10)
+
+    def test_heart_section_includes_vo2_when_data_present(self):
+        """Heart section should include VO2 max stats when data is available."""
+        import datetime
+        import random
+        random.seed(101)
+        for i in range(7):
+            d = datetime.date(2026, 1, 10) + datetime.timedelta(days=i)
+            _write_metric(self.tmpdir, d, "vo2-max",
+                [_quantity_sample(
+                    f"{d}T08:00:00+00:00", f"{d}T08:00:00+00:00",
+                    round(random.uniform(40, 50), 1), "Watch", "Watch",
+                    "mL/min/kg",
+                    "HKQuantityTypeIdentifierVO2Max"
+                )], "Asia/Shanghai",
+                "HKQuantityTypeIdentifierVO2Max", "mL/min/kg")
+        from analyze import mode_report
+        result = mode_report(self.tmpdir,
+                             datetime.date(2026, 1, 1),
+                             datetime.date(2026, 1, 30))
+        self.assertIn("vo2_max_stats", result["heart"])
+
+    def test_activity_section_includes_flights_when_data_present(self):
+        """Activity section should include flights stats when data is available."""
+        import datetime
+        import random
+        random.seed(102)
+        for i in range(10):
+            d = datetime.date(2026, 1, 5) + datetime.timedelta(days=i)
+            _write_metric(self.tmpdir, d, "flights-climbed",
+                [_quantity_sample(
+                    f"{d}T10:00:00+00:00", f"{d}T18:00:00+00:00",
+                    random.randint(5, 20), "Watch", "Watch", "count",
+                    "HKQuantityTypeIdentifierFlightsClimbed"
+                )], "Asia/Shanghai",
+                "HKQuantityTypeIdentifierFlightsClimbed", "count")
+        from analyze import mode_report
+        result = mode_report(self.tmpdir,
+                             datetime.date(2026, 1, 1),
+                             datetime.date(2026, 1, 30))
+        self.assertIn("flights_stats", result["activity"])
+
+    def test_mobility_section_includes_stair_speed_when_data_present(self):
+        """Mobility section should include stair speed stats when data is available."""
+        import datetime
+        import random
+        random.seed(103)
+        # First add walking speed so mobility section exists
+        for i in range(10):
+            d = datetime.date(2026, 1, 5) + datetime.timedelta(days=i)
+            _write_metric(self.tmpdir, d, "walking-speed",
+                [_quantity_sample(
+                    f"{d}T10:00:00+00:00", f"{d}T10:00:00+00:00",
+                    round(random.uniform(1.0, 1.5), 2), "Watch", "Watch", "m/s",
+                    "HKQuantityTypeIdentifierWalkingSpeed"
+                )], "Asia/Shanghai",
+                "HKQuantityTypeIdentifierWalkingSpeed", "m/s")
+            _write_metric(self.tmpdir, d, "stair-ascent-speed",
+                [_quantity_sample(
+                    f"{d}T10:00:00+00:00", f"{d}T10:00:00+00:00",
+                    round(random.uniform(0.5, 1.0), 2), "Watch", "Watch", "m/s",
+                    "HKQuantityTypeIdentifierStairAscentSpeed"
+                )], "Asia/Shanghai",
+                "HKQuantityTypeIdentifierStairAscentSpeed", "m/s")
+        from analyze import mode_report
+        result = mode_report(self.tmpdir,
+                             datetime.date(2026, 1, 1),
+                             datetime.date(2026, 1, 30))
+        self.assertIn("mobility", result)
+        self.assertIn("stair_ascent_stats", result["mobility"])
+
 
 # ---------------------------------------------------------------------------
 # Run tests
