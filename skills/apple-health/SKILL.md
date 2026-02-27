@@ -1,5 +1,5 @@
 ---
-name: apple-health-skills
+name: apple-health
 description: >
   Use when the user wants to analyze, understand, or get insights from personal
   health or fitness data — any source, any format. This skill provides two
