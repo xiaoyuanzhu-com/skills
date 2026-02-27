@@ -916,6 +916,119 @@ class TestAdvancedStats(BaseTestCase):
 
 
 # ---------------------------------------------------------------------------
+# Test 13: _build_metric_stats
+# ---------------------------------------------------------------------------
+
+class TestBuildMetricStats(BaseTestCase):
+    """Tests for _build_metric_stats, the per-metric stats builder."""
+
+    def test_basic_stats(self):
+        from analyze import _build_metric_stats
+        from collections import OrderedDict
+        import datetime
+        data = OrderedDict([
+            (datetime.date(2026, 1, 1), 7.0),
+            (datetime.date(2026, 1, 2), 8.0),
+            (datetime.date(2026, 1, 3), 6.0),
+            (datetime.date(2026, 1, 4), 9.0),
+            (datetime.date(2026, 1, 5), 7.5),
+        ])
+        stats = _build_metric_stats(data)
+        self.assertAlmostEqual(stats["mean"], 7.5, places=1)
+        self.assertAlmostEqual(stats["median"], 7.5, places=1)
+        self.assertIn("stdev", stats)
+        self.assertIn("cv", stats)
+        self.assertIn("percentiles", stats)
+        self.assertEqual(stats["min"]["value"], 6.0)
+        self.assertEqual(stats["max"]["value"], 9.0)
+        self.assertEqual(stats["n"], 5)
+
+    def test_has_rolling_avg(self):
+        from analyze import _build_metric_stats
+        from collections import OrderedDict
+        import datetime
+        data = OrderedDict(
+            (datetime.date(2026, 1, i + 1), float(i * 10))
+            for i in range(10)
+        )
+        stats = _build_metric_stats(data)
+        self.assertEqual(len(stats["rolling_7d"]), 10)
+        self.assertIsNone(stats["rolling_7d"][0])
+        self.assertIsNotNone(stats["rolling_7d"][6])
+
+    def test_has_trend(self):
+        from analyze import _build_metric_stats
+        from collections import OrderedDict
+        import datetime
+        data = OrderedDict(
+            (datetime.date(2026, 1, i + 1), float(i * 2))
+            for i in range(10)
+        )
+        stats = _build_metric_stats(data)
+        self.assertIn("trend_slope", stats)
+        self.assertGreater(stats["trend_slope"], 0)
+        self.assertIn("trend_direction", stats)
+        self.assertEqual(stats["trend_direction"], "up")
+
+    def test_has_day_of_week(self):
+        from analyze import _build_metric_stats
+        from collections import OrderedDict
+        import datetime
+        data = OrderedDict(
+            (datetime.date(2026, 1, i + 1), float(i))
+            for i in range(14)
+        )
+        stats = _build_metric_stats(data)
+        self.assertIn("day_of_week", stats)
+        self.assertIn("Mon", stats["day_of_week"])
+
+    def test_has_distribution(self):
+        from analyze import _build_metric_stats
+        from collections import OrderedDict
+        import datetime
+        data = OrderedDict(
+            (datetime.date(2026, 1, i + 1), float(i))
+            for i in range(20)
+        )
+        stats = _build_metric_stats(data)
+        self.assertIn("distribution", stats)
+        self.assertGreater(len(stats["distribution"]), 0)
+
+    def test_has_dates_list(self):
+        from analyze import _build_metric_stats
+        from collections import OrderedDict
+        import datetime
+        data = OrderedDict([
+            (datetime.date(2026, 1, 1), 5.0),
+            (datetime.date(2026, 1, 2), 10.0),
+        ])
+        stats = _build_metric_stats(data)
+        self.assertEqual(len(stats["dates"]), 2)
+        self.assertEqual(len(stats["values"]), 2)
+
+    def test_empty(self):
+        from analyze import _build_metric_stats
+        from collections import OrderedDict
+        stats = _build_metric_stats(OrderedDict())
+        self.assertEqual(stats["n"], 0)
+        self.assertIsNone(stats["mean"])
+
+    def test_period_over_period(self):
+        from analyze import _build_metric_stats
+        from collections import OrderedDict
+        import datetime
+        data = OrderedDict()
+        for i in range(20):
+            data[datetime.date(2026, 1, i + 1)] = float(5 if i < 10 else 15)
+        stats = _build_metric_stats(data)
+        self.assertIn("period_comparison", stats)
+        pc = stats["period_comparison"]
+        self.assertAlmostEqual(pc["first_half_avg"], 5.0, places=1)
+        self.assertAlmostEqual(pc["second_half_avg"], 15.0, places=1)
+        self.assertGreater(pc["change_pct"], 50)
+
+
+# ---------------------------------------------------------------------------
 # Run tests
 # ---------------------------------------------------------------------------
 

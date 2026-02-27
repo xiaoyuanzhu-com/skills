@@ -509,6 +509,79 @@ def _longest_streak(dated_dict, threshold):
     return best
 
 
+def _build_metric_stats(dated_dict):
+    """Build comprehensive stats for a single metric from OrderedDict{date: value}.
+
+    Returns a dict with: mean, median, stdev, cv, percentiles, min, max,
+    n, dates, values, rolling_7d, rolling_30d, trend_slope, trend_direction,
+    day_of_week, distribution, period_comparison.
+    """
+    dates = list(dated_dict.keys())
+    values = list(dated_dict.values())
+    n = len(values)
+
+    if n == 0:
+        return {
+            "n": 0, "mean": None, "median": None, "stdev": None, "cv": None,
+            "percentiles": None, "min": None, "max": None,
+            "dates": [], "values": [],
+            "rolling_7d": [], "rolling_30d": [],
+            "trend_slope": None, "trend_direction": None,
+            "day_of_week": {d: None for d in _DOW_NAMES},
+            "distribution": None, "period_comparison": None,
+        }
+
+    mean_val = _mean(values)
+    stdev_val = _stdev(values)
+    reg = _linear_regression(values)
+    slope = reg[0] if reg else None
+
+    if slope is None or mean_val is None or mean_val == 0:
+        direction = "flat"
+    elif abs(slope * n) / abs(mean_val) > 0.05:
+        direction = "up" if slope > 0 else "down"
+    else:
+        direction = "flat"
+
+    # Period-over-period: split in half, compare
+    period_comparison = None
+    if n >= 4:
+        mid = n // 2
+        first_half = values[:mid]
+        second_half = values[mid:]
+        fh_avg = _mean(first_half)
+        sh_avg = _mean(second_half)
+        if fh_avg and fh_avg != 0:
+            change_pct = round((sh_avg - fh_avg) / abs(fh_avg) * 100, 1)
+        else:
+            change_pct = 0.0
+        period_comparison = {
+            "first_half_avg": _safe_round(fh_avg),
+            "second_half_avg": _safe_round(sh_avg),
+            "change_pct": change_pct,
+        }
+
+    return {
+        "n": n,
+        "mean": _safe_round(mean_val),
+        "median": _safe_round(_median(values)),
+        "stdev": _safe_round(stdev_val),
+        "cv": _safe_round(_cv(values)),
+        "percentiles": _percentiles(values),
+        "min": _min_with_date(dated_dict),
+        "max": _max_with_date(dated_dict),
+        "dates": [str(d) for d in dates],
+        "values": [_safe_round(v) for v in values],
+        "rolling_7d": _rolling_avg(values, 7),
+        "rolling_30d": _rolling_avg(values, 30),
+        "trend_slope": _safe_round(slope, 4) if slope is not None else None,
+        "trend_direction": direction,
+        "day_of_week": _day_of_week_avg(dated_dict),
+        "distribution": _distribution_bins(values, n_bins=10),
+        "period_comparison": period_comparison,
+    }
+
+
 def pearson(x, y):
     """Compute Pearson correlation coefficient with approximate p-value.
 
