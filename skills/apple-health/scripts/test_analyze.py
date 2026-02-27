@@ -1029,6 +1029,170 @@ class TestBuildMetricStats(BaseTestCase):
 
 
 # ---------------------------------------------------------------------------
+# Test 14: mode_report — premium mega-report
+# ---------------------------------------------------------------------------
+
+class TestReportMode(BaseTestCase):
+    """Tests for mode_report — the premium mega-report."""
+
+    def setUp(self):
+        super().setUp()
+        import datetime
+        import random
+        random.seed(42)
+        for i in range(30):
+            d = datetime.date(2026, 1, 1) + datetime.timedelta(days=i)
+            # Steps
+            _write_metric(self.tmpdir, d, "step-count",
+                [_quantity_sample(
+                    f"{d}T08:00:00+00:00", f"{d}T09:00:00+00:00",
+                    random.randint(5000, 15000), "Watch", "Watch", "count",
+                    "HKQuantityTypeIdentifierStepCount"
+                )], "Asia/Shanghai",
+                "HKQuantityTypeIdentifierStepCount", "count")
+            # Resting HR
+            _write_metric(self.tmpdir, d, "resting-heart-rate",
+                [_quantity_sample(
+                    f"{d}T06:00:00+00:00", f"{d}T06:00:00+00:00",
+                    random.randint(55, 70), "Watch", "Watch", "count/min",
+                    "HKQuantityTypeIdentifierRestingHeartRate"
+                )], "Asia/Shanghai",
+                "HKQuantityTypeIdentifierRestingHeartRate", "count/min")
+            # HRV
+            _write_metric(self.tmpdir, d, "heart-rate-variability-sdnn",
+                [_quantity_sample(
+                    f"{d}T06:00:00+00:00", f"{d}T06:00:00+00:00",
+                    round(random.uniform(30, 60), 1), "Watch", "Watch", "ms",
+                    "HKQuantityTypeIdentifierHeartRateVariabilitySDNN"
+                )], "Asia/Shanghai",
+                "HKQuantityTypeIdentifierHeartRateVariabilitySDNN", "ms")
+            # Exercise time
+            _write_metric(self.tmpdir, d, "apple-exercise-time",
+                [_quantity_sample(
+                    f"{d}T17:00:00+00:00", f"{d}T17:30:00+00:00",
+                    random.randint(0, 60), "Watch", "Watch", "min",
+                    "HKQuantityTypeIdentifierAppleExerciseTime"
+                )], "Asia/Shanghai",
+                "HKQuantityTypeIdentifierAppleExerciseTime", "min")
+            # Active energy
+            _write_metric(self.tmpdir, d, "active-energy-burned",
+                [_quantity_sample(
+                    f"{d}T08:00:00+00:00", f"{d}T22:00:00+00:00",
+                    round(random.uniform(200, 600), 1), "Watch", "Watch", "kcal",
+                    "HKQuantityTypeIdentifierActiveEnergyBurned"
+                )], "Asia/Shanghai",
+                "HKQuantityTypeIdentifierActiveEnergyBurned", "kcal")
+            # Sleep
+            bedtime_h = random.randint(22, 23)
+            next_day = d + datetime.timedelta(days=1)
+            _write_metric(self.tmpdir, d, "sleep-analysis",
+                [
+                    _sleep_sample(f"{d}T{bedtime_h}:00:00+00:00",
+                                  f"{d}T{bedtime_h}:30:00+00:00",
+                                  "asleepCore", "Watch", "Asia/Shanghai"),
+                    _sleep_sample(f"{d}T{bedtime_h}:30:00+00:00",
+                                  f"{d}T{bedtime_h + 1 if bedtime_h < 23 else 23}:59:00+00:00",
+                                  "asleepDeep", "Watch", "Asia/Shanghai"),
+                    _sleep_sample(f"{next_day}T00:00:00+00:00",
+                                  f"{next_day}T02:00:00+00:00",
+                                  "asleepREM", "Watch", "Asia/Shanghai"),
+                    _sleep_sample(f"{next_day}T02:00:00+00:00",
+                                  f"{next_day}T06:00:00+00:00",
+                                  "asleepCore", "Watch", "Asia/Shanghai"),
+                ], "Asia/Shanghai",
+                "HKCategoryTypeIdentifierSleepAnalysis", "")
+
+    def test_report_top_level_keys(self):
+        from analyze import mode_report
+        import datetime
+        result = mode_report(self.tmpdir,
+                             datetime.date(2026, 1, 1),
+                             datetime.date(2026, 1, 30))
+        for key in ["period", "executive_summary", "sleep", "heart",
+                     "activity", "interconnections", "methodology"]:
+            self.assertIn(key, result, f"Missing top-level key: {key}")
+
+    def test_executive_summary_structure(self):
+        from analyze import mode_report
+        import datetime
+        result = mode_report(self.tmpdir,
+                             datetime.date(2026, 1, 1),
+                             datetime.date(2026, 1, 30))
+        es = result["executive_summary"]
+        self.assertIn("categories", es)
+        self.assertGreater(len(es["categories"]), 0)
+        cat = es["categories"][0]
+        for key in ["name", "score", "trend", "summary_value", "unit"]:
+            self.assertIn(key, cat, f"Category missing key: {key}")
+
+    def test_sleep_section(self):
+        from analyze import mode_report
+        import datetime
+        result = mode_report(self.tmpdir,
+                             datetime.date(2026, 1, 1),
+                             datetime.date(2026, 1, 30))
+        sleep = result["sleep"]
+        self.assertIn("duration_stats", sleep)
+        self.assertIn("stage_averages", sleep)
+        self.assertIn("nightly", sleep)
+        self.assertIn("bedtime_stats", sleep)
+        ds = sleep["duration_stats"]
+        self.assertIn("mean", ds)
+        self.assertIn("median", ds)
+        self.assertIn("percentiles", ds)
+        self.assertIn("distribution", ds)
+        self.assertIn("day_of_week", ds)
+
+    def test_heart_section(self):
+        from analyze import mode_report
+        import datetime
+        result = mode_report(self.tmpdir,
+                             datetime.date(2026, 1, 1),
+                             datetime.date(2026, 1, 30))
+        heart = result["heart"]
+        self.assertIn("resting_hr_stats", heart)
+        self.assertIn("hrv_stats", heart)
+        rhr = heart["resting_hr_stats"]
+        self.assertIn("mean", rhr)
+        self.assertIn("percentiles", rhr)
+        self.assertIn("day_of_week", rhr)
+
+    def test_activity_section(self):
+        from analyze import mode_report
+        import datetime
+        result = mode_report(self.tmpdir,
+                             datetime.date(2026, 1, 1),
+                             datetime.date(2026, 1, 30))
+        act = result["activity"]
+        self.assertIn("steps_stats", act)
+        self.assertIn("exercise_stats", act)
+        self.assertIn("energy_stats", act)
+        steps = act["steps_stats"]
+        self.assertIn("mean", steps)
+        self.assertIn("streak_7k", steps)
+
+    def test_interconnections(self):
+        from analyze import mode_report
+        import datetime
+        result = mode_report(self.tmpdir,
+                             datetime.date(2026, 1, 1),
+                             datetime.date(2026, 1, 30))
+        ic = result["interconnections"]
+        self.assertIn("matrix", ic)
+        self.assertIn("top_correlations", ic)
+
+    def test_methodology(self):
+        from analyze import mode_report
+        import datetime
+        result = mode_report(self.tmpdir,
+                             datetime.date(2026, 1, 1),
+                             datetime.date(2026, 1, 30))
+        meth = result["methodology"]
+        self.assertIn("metrics_analyzed", meth)
+        self.assertIn("days_in_period", meth)
+
+
+# ---------------------------------------------------------------------------
 # Run tests
 # ---------------------------------------------------------------------------
 

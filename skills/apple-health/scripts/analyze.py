@@ -1260,6 +1260,352 @@ def _find_latest_date(data_dir):
 
 
 # ---------------------------------------------------------------------------
+# Report mode — premium health assessment
+# ---------------------------------------------------------------------------
+
+# Metrics to attempt loading for each report section
+_REPORT_SLEEP_METRICS = ["sleep-analysis"]
+_REPORT_HEART_METRICS = ["resting-heart-rate", "heart-rate-variability-sdnn",
+                          "walking-heart-rate-average"]
+_REPORT_ACTIVITY_METRICS = ["step-count", "apple-exercise-time",
+                             "active-energy-burned", "distance-walking-running"]
+_REPORT_RESPIRATORY_METRICS = ["respiratory-rate", "oxygen-saturation"]
+_REPORT_MOBILITY_METRICS = ["walking-speed", "walking-step-length",
+                             "walking-asymmetry-percentage"]
+
+
+def _score_category(stats):
+    """Score a metric on a 1-5 scale based on consistency and trend.
+
+    This is a *personal* score — not compared to population norms.
+    5 = very consistent + stable/improving, 1 = high variance + worsening.
+    """
+    if not stats or stats["n"] < 7:
+        return None
+    score = 3.0  # baseline
+    cv = stats.get("cv")
+    if cv is not None:
+        if cv < 0.10:
+            score += 0.5
+        elif cv < 0.20:
+            score += 0.0
+        elif cv < 0.35:
+            score -= 0.5
+        else:
+            score -= 1.0
+    direction = stats.get("trend_direction")
+    if direction == "flat":
+        score += 0.5
+    return max(1.0, min(5.0, round(score, 1)))
+
+
+def _build_sleep_section(data_dir, from_date, to_date):
+    """Build the sleep section of the report."""
+    sleep_data = mode_sleep(data_dir, from_date, to_date)
+    nightly = sleep_data.get("nightly", [])
+
+    if not nightly:
+        return None
+
+    from collections import OrderedDict
+    duration_dict = OrderedDict()
+    bedtime_minutes = []
+    deep_pcts = []
+    core_pcts = []
+    rem_pcts = []
+
+    for night in nightly:
+        d = _iso_to_date(night["date"])
+        duration_dict[d] = night["total_hrs"]
+        deep_pcts.append(night["deep_pct"])
+        core_pcts.append(night["core_pct"])
+        rem_pcts.append(night["rem_pct"])
+        if night.get("bedtime_local"):
+            bt = night["bedtime_local"]
+            try:
+                parts = bt.split("T")[1].split(":")
+                mins = int(parts[0]) * 60 + int(parts[1])
+                if mins < 720:  # before noon = after midnight
+                    mins += 1440
+                bedtime_minutes.append(mins)
+            except (IndexError, ValueError):
+                pass
+
+    duration_stats = _build_metric_stats(duration_dict)
+    bedtime_stdev = _stdev(bedtime_minutes) if bedtime_minutes else None
+
+    return {
+        "duration_stats": duration_stats,
+        "stage_averages": sleep_data.get("averages", {}),
+        "stage_trends": {
+            "deep_pcts": deep_pcts,
+            "core_pcts": core_pcts,
+            "rem_pcts": rem_pcts,
+        },
+        "nightly": nightly,
+        "bedtime_stats": {
+            "stdev_minutes": _safe_round(bedtime_stdev),
+            "values_minutes": bedtime_minutes,
+        },
+        "nights_analyzed": sleep_data.get("nights_analyzed", 0),
+    }
+
+
+def _build_heart_section(data_dir, from_date, to_date):
+    """Build the heart section of the report."""
+    rhr_data = aggregate_metric(data_dir, "resting-heart-rate", from_date, to_date)
+    hrv_data = aggregate_metric(data_dir, "heart-rate-variability-sdnn", from_date, to_date)
+    whr_data = aggregate_metric(data_dir, "walking-heart-rate-average", from_date, to_date)
+
+    if not rhr_data and not hrv_data:
+        return None
+
+    result = {
+        "resting_hr_stats": _build_metric_stats(rhr_data),
+        "hrv_stats": _build_metric_stats(hrv_data),
+    }
+
+    if whr_data:
+        result["walking_hr_stats"] = _build_metric_stats(whr_data)
+
+    scatter = []
+    for d in rhr_data:
+        if d in hrv_data:
+            scatter.append({"date": str(d), "rhr": rhr_data[d], "hrv": hrv_data[d]})
+    result["hr_hrv_scatter"] = scatter
+
+    heart_data = mode_heart(data_dir, from_date, to_date)
+    result["weekly_resting_hr"] = heart_data.get("weekly_resting_hr", [])
+    result["weekly_hrv"] = heart_data.get("weekly_hrv", [])
+
+    return result
+
+
+def _build_activity_section(data_dir, from_date, to_date):
+    """Build the activity section of the report."""
+    steps_data = aggregate_metric(data_dir, "step-count", from_date, to_date)
+    exercise_data = aggregate_metric(data_dir, "apple-exercise-time", from_date, to_date)
+    energy_data = aggregate_metric(data_dir, "active-energy-burned", from_date, to_date)
+    distance_data = aggregate_metric(data_dir, "distance-walking-running", from_date, to_date)
+
+    if not steps_data and not exercise_data:
+        return None
+
+    result = {
+        "steps_stats": _build_metric_stats(steps_data),
+        "exercise_stats": _build_metric_stats(exercise_data),
+        "energy_stats": _build_metric_stats(energy_data),
+    }
+
+    if distance_data:
+        result["distance_stats"] = _build_metric_stats(distance_data)
+
+    result["steps_stats"]["streak_7k"] = _longest_streak(steps_data, 7000)
+    result["exercise_stats"]["streak_any"] = _longest_streak(exercise_data, 1)
+
+    return result
+
+
+def _build_respiratory_section(data_dir, from_date, to_date):
+    """Build the respiratory section. Returns None if no data."""
+    rr_data = aggregate_metric(data_dir, "respiratory-rate", from_date, to_date)
+    spo2_data = aggregate_metric(data_dir, "oxygen-saturation", from_date, to_date)
+    if not rr_data and not spo2_data:
+        return None
+    result = {}
+    if rr_data:
+        result["respiratory_rate_stats"] = _build_metric_stats(rr_data)
+    if spo2_data:
+        result["spo2_stats"] = _build_metric_stats(spo2_data)
+    return result
+
+
+def _build_mobility_section(data_dir, from_date, to_date):
+    """Build the mobility section. Returns None if no data."""
+    ws_data = aggregate_metric(data_dir, "walking-speed", from_date, to_date)
+    sl_data = aggregate_metric(data_dir, "walking-step-length", from_date, to_date)
+    asym_data = aggregate_metric(data_dir, "walking-asymmetry-percentage", from_date, to_date)
+    if not ws_data and not sl_data:
+        return None
+    result = {}
+    if ws_data:
+        result["walking_speed_stats"] = _build_metric_stats(ws_data)
+    if sl_data:
+        result["step_length_stats"] = _build_metric_stats(sl_data)
+    if asym_data:
+        result["asymmetry_stats"] = _build_metric_stats(asym_data)
+    return result
+
+
+def _build_interconnections(data_dir, from_date, to_date):
+    """Build the correlation matrix and top correlations."""
+    all_metrics = list(ADDITIVE_METRICS | SINGLE_VALUE_METRICS | MEAN_METRICS)
+    series = {}
+    for m in all_metrics:
+        data = aggregate_metric(data_dir, m, from_date, to_date)
+        if len(data) >= 7:
+            series[m] = data
+
+    if len(series) < 2:
+        return {"matrix": [], "metric_names": [], "top_correlations": []}
+
+    metric_names = sorted(series.keys())
+    matrix = []
+    all_corrs = []
+
+    for a in metric_names:
+        row = {"metric": a, "values": {}}
+        for b in metric_names:
+            if a == b:
+                row["values"][b] = 1.0
+                continue
+            common_dates = set(series[a].keys()) & set(series[b].keys())
+            if len(common_dates) < 7:
+                row["values"][b] = None
+                continue
+            dates_sorted = sorted(common_dates)
+            x = [series[a][d] for d in dates_sorted]
+            y = [series[b][d] for d in dates_sorted]
+            r, p, n = pearson(x, y)
+            row["values"][b] = _safe_round(r)
+            if a < b:
+                all_corrs.append({
+                    "metric_a": a, "metric_b": b,
+                    "r": _safe_round(r), "p": _safe_round(p, 4), "n": n,
+                })
+        matrix.append(row)
+
+    all_corrs.sort(key=lambda c: abs(c["r"] or 0), reverse=True)
+
+    return {
+        "matrix": matrix,
+        "metric_names": metric_names,
+        "top_correlations": all_corrs[:10],
+    }
+
+
+def mode_report(data_dir, from_date, to_date):
+    """Premium health assessment report — all sections in one pass."""
+    sleep = _build_sleep_section(data_dir, from_date, to_date)
+    heart = _build_heart_section(data_dir, from_date, to_date)
+    activity = _build_activity_section(data_dir, from_date, to_date)
+    respiratory = _build_respiratory_section(data_dir, from_date, to_date)
+    mobility = _build_mobility_section(data_dir, from_date, to_date)
+    interconnections = _build_interconnections(data_dir, from_date, to_date)
+
+    # Executive summary — score each category
+    categories = []
+    if sleep and sleep["duration_stats"]["n"] > 0:
+        ds = sleep["duration_stats"]
+        categories.append({
+            "name": "Sleep",
+            "score": _score_category(ds),
+            "trend": ds["trend_direction"],
+            "summary_value": ds["mean"],
+            "unit": "hrs avg",
+            "sparkline": ds["values"][-14:],
+        })
+    if heart and heart["resting_hr_stats"]["n"] > 0:
+        rhr = heart["resting_hr_stats"]
+        categories.append({
+            "name": "Resting Heart Rate",
+            "score": _score_category(rhr),
+            "trend": rhr["trend_direction"],
+            "summary_value": rhr["mean"],
+            "unit": "bpm avg",
+            "sparkline": rhr["values"][-14:],
+        })
+    if heart and heart["hrv_stats"]["n"] > 0:
+        hrv = heart["hrv_stats"]
+        categories.append({
+            "name": "Heart Rate Variability",
+            "score": _score_category(hrv),
+            "trend": hrv["trend_direction"],
+            "summary_value": hrv["mean"],
+            "unit": "ms avg",
+            "sparkline": hrv["values"][-14:],
+        })
+    if activity and activity["steps_stats"]["n"] > 0:
+        ss = activity["steps_stats"]
+        categories.append({
+            "name": "Daily Steps",
+            "score": _score_category(ss),
+            "trend": ss["trend_direction"],
+            "summary_value": ss["mean"],
+            "unit": "avg",
+            "sparkline": ss["values"][-14:],
+        })
+    if activity and activity["exercise_stats"]["n"] > 0:
+        es = activity["exercise_stats"]
+        categories.append({
+            "name": "Exercise",
+            "score": _score_category(es),
+            "trend": es["trend_direction"],
+            "summary_value": es["mean"],
+            "unit": "min avg",
+            "sparkline": es["values"][-14:],
+        })
+    if activity and activity.get("energy_stats") and activity["energy_stats"]["n"] > 0:
+        en = activity["energy_stats"]
+        categories.append({
+            "name": "Active Energy",
+            "score": _score_category(en),
+            "trend": en["trend_direction"],
+            "summary_value": en["mean"],
+            "unit": "kcal avg",
+            "sparkline": en["values"][-14:],
+        })
+    if respiratory and respiratory.get("respiratory_rate_stats"):
+        rr = respiratory["respiratory_rate_stats"]
+        categories.append({
+            "name": "Respiratory Rate",
+            "score": _score_category(rr),
+            "trend": rr["trend_direction"],
+            "summary_value": rr["mean"],
+            "unit": "br/min",
+            "sparkline": rr["values"][-14:],
+        })
+    if mobility and mobility.get("walking_speed_stats"):
+        ws = mobility["walking_speed_stats"]
+        categories.append({
+            "name": "Mobility",
+            "score": _score_category(ws),
+            "trend": ws["trend_direction"],
+            "summary_value": ws["mean"],
+            "unit": "m/s avg",
+            "sparkline": ws["values"][-14:],
+        })
+
+    metrics_found = 0
+    for section_data in [sleep, heart, activity, respiratory, mobility]:
+        if section_data:
+            for key, val in section_data.items():
+                if isinstance(val, dict) and "n" in val and val["n"] > 0:
+                    metrics_found += 1
+
+    result = {
+        "period": {"from": str(from_date), "to": str(to_date)},
+        "executive_summary": {"categories": categories},
+        "sleep": sleep,
+        "heart": heart,
+        "activity": activity,
+        "interconnections": interconnections,
+        "methodology": {
+            "metrics_analyzed": metrics_found,
+            "days_in_period": (to_date - from_date).days + 1,
+            "generated_at": str(from_date),
+        },
+    }
+
+    if respiratory:
+        result["respiratory"] = respiratory
+    if mobility:
+        result["mobility"] = mobility
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -1272,7 +1618,7 @@ def main():
     parser.add_argument("data_dir", help="Path to the data directory (YYYY/MM/DD/*.json)")
     parser.add_argument("--mode", required=True,
                         choices=["scan", "sleep", "activity", "heart",
-                                 "correlate", "compare", "yearly"],
+                                 "correlate", "compare", "yearly", "report"],
                         help="Analysis mode")
     parser.add_argument("--from", dest="from_date", help="Start date (YYYY-MM-DD)")
     parser.add_argument("--to", dest="to_date", help="End date (YYYY-MM-DD)")
@@ -1330,6 +1676,10 @@ def main():
         elif mode == "heart":
             from_date, to_date = _resolve_dates(vars(args), data_dir)
             result = mode_heart(data_dir, from_date, to_date)
+
+        elif mode == "report":
+            from_date, to_date = _resolve_dates(vars(args), data_dir)
+            result = mode_report(data_dir, from_date, to_date)
 
         else:
             result = {"error": f"Unknown mode: {mode}"}
