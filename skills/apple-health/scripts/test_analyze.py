@@ -774,6 +774,148 @@ class TestYearlyMode(BaseTestCase):
 
 
 # ---------------------------------------------------------------------------
+# Test 12: Advanced statistical helper functions
+# ---------------------------------------------------------------------------
+
+class TestAdvancedStats(BaseTestCase):
+    """Tests for new statistical helper functions."""
+
+    def test_median_odd(self):
+        from analyze import _median
+        self.assertEqual(_median([3, 1, 2]), 2)
+
+    def test_median_even(self):
+        from analyze import _median
+        self.assertEqual(_median([4, 1, 3, 2]), 2.5)
+
+    def test_median_empty(self):
+        from analyze import _median
+        self.assertIsNone(_median([]))
+
+    def test_median_single(self):
+        from analyze import _median
+        self.assertEqual(_median([5]), 5)
+
+    def test_percentiles(self):
+        from analyze import _percentiles
+        data = list(range(1, 101))  # 1..100
+        p = _percentiles(data)
+        self.assertAlmostEqual(p["p10"], 10.9, delta=1)
+        self.assertAlmostEqual(p["p25"], 25.75, delta=1)
+        self.assertAlmostEqual(p["p75"], 75.25, delta=1)
+        self.assertAlmostEqual(p["p90"], 90.1, delta=1)
+
+    def test_percentiles_empty(self):
+        from analyze import _percentiles
+        self.assertIsNone(_percentiles([]))
+
+    def test_min_max_with_dates(self):
+        from analyze import _min_with_date, _max_with_date
+        from collections import OrderedDict
+        import datetime
+        data = OrderedDict([
+            (datetime.date(2026, 1, 1), 10),
+            (datetime.date(2026, 1, 2), 5),
+            (datetime.date(2026, 1, 3), 15),
+        ])
+        mn = _min_with_date(data)
+        mx = _max_with_date(data)
+        self.assertEqual(mn["value"], 5)
+        self.assertEqual(mn["date"], "2026-01-02")
+        self.assertEqual(mx["value"], 15)
+        self.assertEqual(mx["date"], "2026-01-03")
+
+    def test_min_max_empty(self):
+        from analyze import _min_with_date, _max_with_date
+        from collections import OrderedDict
+        self.assertIsNone(_min_with_date(OrderedDict()))
+        self.assertIsNone(_max_with_date(OrderedDict()))
+
+    def test_rolling_avg(self):
+        from analyze import _rolling_avg
+        vals = [10, 20, 30, 40, 50]
+        r = _rolling_avg(vals, window=3)
+        self.assertEqual(len(r), 5)
+        self.assertIsNone(r[0])
+        self.assertIsNone(r[1])
+        self.assertAlmostEqual(r[2], 20.0)
+        self.assertAlmostEqual(r[3], 30.0)
+        self.assertAlmostEqual(r[4], 40.0)
+
+    def test_rolling_avg_short(self):
+        from analyze import _rolling_avg
+        r = _rolling_avg([1, 2], window=7)
+        self.assertEqual(len(r), 2)
+        self.assertTrue(all(v is None for v in r))
+
+    def test_linear_regression(self):
+        from analyze import _linear_regression
+        vals = [1, 3, 5, 7, 9]
+        slope, intercept = _linear_regression(vals)
+        self.assertAlmostEqual(slope, 2.0, places=5)
+        self.assertAlmostEqual(intercept, 1.0, places=5)
+
+    def test_linear_regression_flat(self):
+        from analyze import _linear_regression
+        vals = [5, 5, 5, 5]
+        slope, intercept = _linear_regression(vals)
+        self.assertAlmostEqual(slope, 0.0, places=5)
+
+    def test_linear_regression_short(self):
+        from analyze import _linear_regression
+        self.assertIsNone(_linear_regression([]))
+        self.assertIsNone(_linear_regression([1]))
+
+    def test_day_of_week_avg(self):
+        from analyze import _day_of_week_avg
+        from collections import OrderedDict
+        import datetime
+        # 2026-01-05 is Monday
+        data = OrderedDict([
+            (datetime.date(2026, 1, 5), 100),
+            (datetime.date(2026, 1, 6), 200),
+            (datetime.date(2026, 1, 12), 300),
+        ])
+        dow = _day_of_week_avg(data)
+        self.assertAlmostEqual(dow["Mon"], 200.0)
+        self.assertAlmostEqual(dow["Tue"], 200.0)
+        self.assertIsNone(dow["Wed"])
+
+    def test_distribution_bins(self):
+        from analyze import _distribution_bins
+        vals = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        bins = _distribution_bins(vals, n_bins=5)
+        self.assertEqual(len(bins), 5)
+        self.assertTrue(all("from" in b and "to" in b and "count" in b for b in bins))
+        total_count = sum(b["count"] for b in bins)
+        self.assertEqual(total_count, 10)
+
+    def test_distribution_bins_empty(self):
+        from analyze import _distribution_bins
+        self.assertIsNone(_distribution_bins([]))
+
+    def test_streak(self):
+        from analyze import _longest_streak
+        from collections import OrderedDict
+        import datetime
+        data = OrderedDict([
+            (datetime.date(2026, 1, 1), 8000),
+            (datetime.date(2026, 1, 2), 9000),
+            (datetime.date(2026, 1, 3), 3000),
+            (datetime.date(2026, 1, 4), 10000),
+            (datetime.date(2026, 1, 5), 11000),
+            (datetime.date(2026, 1, 6), 7000),
+        ])
+        s = _longest_streak(data, threshold=7000)
+        self.assertEqual(s, 3)
+
+    def test_streak_empty(self):
+        from analyze import _longest_streak
+        from collections import OrderedDict
+        self.assertEqual(_longest_streak(OrderedDict(), threshold=5000), 0)
+
+
+# ---------------------------------------------------------------------------
 # Run tests
 # ---------------------------------------------------------------------------
 

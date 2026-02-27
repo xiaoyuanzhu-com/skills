@@ -382,6 +382,133 @@ def _cv(values):
     return s / m
 
 
+def _median(values):
+    """Median value. Returns None if empty."""
+    if not values:
+        return None
+    s = sorted(values)
+    n = len(s)
+    if n % 2 == 1:
+        return s[n // 2]
+    return (s[n // 2 - 1] + s[n // 2]) / 2
+
+
+def _percentiles(values):
+    """P10, P25, P75, P90. Returns None if empty."""
+    if not values:
+        return None
+    s = sorted(values)
+    n = len(s)
+
+    def _lerp(p):
+        k = (n - 1) * p
+        f = int(k)
+        c = f + 1
+        if c >= n:
+            return s[f]
+        return s[f] + (k - f) * (s[c] - s[f])
+
+    return {
+        "p10": round(_lerp(0.10), 2),
+        "p25": round(_lerp(0.25), 2),
+        "p75": round(_lerp(0.75), 2),
+        "p90": round(_lerp(0.90), 2),
+    }
+
+
+def _min_with_date(dated_dict):
+    """Min value with its date from an OrderedDict{date: value}. Returns None if empty."""
+    if not dated_dict:
+        return None
+    d, v = min(dated_dict.items(), key=lambda x: x[1])
+    return {"value": v, "date": str(d)}
+
+
+def _max_with_date(dated_dict):
+    """Max value with its date from an OrderedDict{date: value}. Returns None if empty."""
+    if not dated_dict:
+        return None
+    d, v = max(dated_dict.items(), key=lambda x: x[1])
+    return {"value": v, "date": str(d)}
+
+
+def _rolling_avg(values, window=7):
+    """Rolling average. Returns list same length as values; None for positions with insufficient data."""
+    result = []
+    for i in range(len(values)):
+        if i < window - 1:
+            result.append(None)
+        else:
+            chunk = values[i - window + 1 : i + 1]
+            result.append(round(sum(chunk) / len(chunk), 2))
+    return result
+
+
+def _linear_regression(values):
+    """Simple linear regression (y = slope*x + intercept). Returns (slope, intercept) or None."""
+    n = len(values)
+    if n < 2:
+        return None
+    x_mean = (n - 1) / 2
+    y_mean = sum(values) / n
+    num = sum((i - x_mean) * (values[i] - y_mean) for i in range(n))
+    den = sum((i - x_mean) ** 2 for i in range(n))
+    if den == 0:
+        return (0.0, y_mean)
+    slope = num / den
+    intercept = y_mean - slope * x_mean
+    return (round(slope, 6), round(intercept, 6))
+
+
+_DOW_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
+def _day_of_week_avg(dated_dict):
+    """Average per day of week from OrderedDict{date: value}. Returns dict with Mon-Sun keys."""
+    buckets = {d: [] for d in _DOW_NAMES}
+    for dt, val in dated_dict.items():
+        buckets[_DOW_NAMES[dt.weekday()]].append(val)
+    return {d: round(sum(v) / len(v), 2) if v else None for d, v in buckets.items()}
+
+
+def _distribution_bins(values, n_bins=10):
+    """Histogram bins. Returns list of {from, to, count} or None if empty."""
+    if not values:
+        return None
+    lo, hi = min(values), max(values)
+    if lo == hi:
+        return [{"from": round(lo, 2), "to": round(hi, 2), "count": len(values)}]
+    width = (hi - lo) / n_bins
+    bins = []
+    for i in range(n_bins):
+        b_from = lo + i * width
+        b_to = lo + (i + 1) * width
+        count = sum(1 for v in values if (b_from <= v < b_to) or (i == n_bins - 1 and v == b_to))
+        bins.append({"from": round(b_from, 2), "to": round(b_to, 2), "count": count})
+    return bins
+
+
+def _longest_streak(dated_dict, threshold):
+    """Longest consecutive-day streak where value >= threshold. Returns int."""
+    if not dated_dict:
+        return 0
+    dates = sorted(dated_dict.keys())
+    best = 0
+    current = 0
+    prev = None
+    for d in dates:
+        if dated_dict[d] >= threshold:
+            if prev and (d - prev).days == 1:
+                current += 1
+            else:
+                current = 1
+        else:
+            current = 0
+        best = max(best, current)
+        prev = d
+    return best
+
+
 def pearson(x, y):
     """Compute Pearson correlation coefficient with approximate p-value.
 
