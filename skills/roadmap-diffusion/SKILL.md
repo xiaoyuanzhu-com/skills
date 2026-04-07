@@ -38,9 +38,29 @@ Entered whenever the CEO is actively in the conversation:
 ### Execution Phase (autonomous)
 
 Entered after CEO says "go":
-- Work through the roadmap linearly, dispatching sub-agents per task.
-- Low-confidence items get **skipped** (not blocked) — record context, move on.
-- All progress and results written to documentation files.
+
+**CRITICAL: Do not stop. Do not pause. Do not ask the CEO for input.**
+
+Once in Execution Phase, the Director runs continuously until the roadmap is done:
+
+1. Pick the next task from the roadmap.
+2. Dispatch the appropriate sub-agent(s).
+3. Collect results, update documentation (roadmap file + task file).
+4. Immediately move to the next task. Do NOT wait for user input between tasks.
+5. Repeat until every task is either ✅ completed or ⏭️ skipped.
+
+**When to skip (not block):**
+- 🔴 Low-confidence decisions — record full context in the task file, move on.
+- Sub-agent fails or returns unclear results — document what happened, move on.
+- A task depends on a skipped task — skip it too, note the dependency.
+
+**When execution is truly done:**
+- All tasks processed (completed or skipped).
+- Update the roadmap file with all execution results.
+- Present the summary to the CEO: what got done, what was skipped, what needs decisions.
+- If there are follow-up items, draft the next roadmap suggestion.
+
+**The only reason to pause mid-execution** is if the session is about to hit context limits. In that case, write a Handoff section and tell the CEO.
 
 ## Daily Cycle
 
