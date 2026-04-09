@@ -109,7 +109,7 @@ After both product research and tech audit:
    - Include rationale for each proposed task: why it matters.
    - Prioritize by impact, not just ease.
    - Think like a product leader AND a tech leader.
-2. **Write everything to disk before pausing.** The next roadmap file, product research, tech audit, and executive review must all be saved so the CEO can pick up from a fresh session. Never hold planning state only in conversation context.
+2. **Commit & push all planning artifacts** — the next roadmap file, product research, tech audit, and executive review slide. Treat planning output the same as execution output: it lands on `main` so the CEO can review from a fresh session. The next roadmap has status `planning` — it's a proposal, not an approval. The CEO will revise it in the next Planning Phase.
 
 ### Finishing Phase 6: Executive Review Slide
 
