@@ -57,89 +57,29 @@ Once in Execution Phase, the Director runs continuously until the roadmap is don
 - Sub-agent fails or returns unclear results — document what happened, move on.
 - A task depends on a skipped task — skip it too, note the dependency.
 
-**When all tasks are processed, enter the Finishing Phases (still autonomous — do NOT pause between them):**
+**After all roadmap tasks are processed, the Director appends the following closing tasks to the roadmap and continues the same cycle (dispatch → verify → commit & push → next):**
 
-### Finishing Phase 1: E2E Testing & Bug Fixing
-
-After all roadmap tasks are completed/skipped:
-
-1. Dispatch a sub-agent to run **end-to-end tests** across the entire project — not just unit tests for individual tasks, but integration/E2E tests that exercise the full system.
-2. If bugs are found, **create new tasks** (append to the roadmap task list), fix them, verify, commit & push — same cycle as regular tasks.
-3. Iterate until E2E tests pass cleanly. The task list may grow — that's expected and fine.
-
-### Finishing Phase 2: User Testing
-
-Once E2E tests pass:
-
-1. Dispatch a sub-agent to **test the product as a target user would** — realistic workflows, common use cases, edge cases a real user would hit.
-2. Document findings: what works well, what feels broken or confusing, UX issues, missing functionality.
-3. Fix critical issues found (same cycle: create task → implement → verify → commit & push).
-4. Save user testing results in the task documentation.
-
-### Finishing Phase 3: Product Research
-
-After user testing:
-
-1. Dispatch a Research sub-agent to:
-   - Synthesize feedback from E2E testing and user testing.
-   - Research competitors, best practices, and market trends relevant to the product.
-   - Think strategically about what would make the product succeed — not just what's broken, but what's missing, what's the next big lever.
-2. Output: a product research report with proposed product EPICs for the next roadmap.
-
-### Finishing Phase 4: Tech Audit
-
-After product research (so tech knows what new features are coming and can plan accordingly):
-
-1. Dispatch a Research sub-agent to **audit the codebase** for:
-   - **Refactoring needs**: code duplication, outdated patterns, dead code, overgrown modules.
-   - **Performance**: slow paths, missing caching, inefficient queries, bundle size.
-   - **Maintainability**: missing tests, brittle integrations, unclear abstractions, tech debt.
-   - **Capability gaps**: infrastructure that would need to change to support proposed product features.
-2. Classify findings:
-   - **Minor** — small cleanups, linting, trivial refactors. These get bundled into a single summary stat line (e.g., "12 minor tech improvements"), not individual roadmap tasks.
-   - **Major** — significant refactors, performance overhauls, architectural changes, or capability unlocks. Each gets its own EPIC and task(s) in the next roadmap.
-3. Output: a tech audit report with proposed tech EPICs for the next roadmap.
-
-### Finishing Phase 5: Draft Next Roadmap
-
-After both product research and tech audit:
-
-1. Combine product and tech proposals into the **next roadmap** in `docs/agent/roadmap/rNNNN+1-slug.md` with status `planning`.
-   - Organize tasks by EPIC — both product and tech EPICs live in the same roadmap.
-   - Include rationale for each proposed task: why it matters.
-   - Prioritize by impact, not just ease.
-   - Think like a product leader AND a tech leader.
-2. **Commit & push all planning artifacts** — the next roadmap file, product research, tech audit, and executive review slide. Treat planning output the same as execution output: it lands on `main` so the CEO can review from a fresh session. The next roadmap has status `planning` — it's a proposal, not an approval. The CEO will revise it in the next Planning Phase.
-
-### Finishing Phase 6: Executive Review Slide
-
-After drafting the next roadmap:
-
-1. Generate an **HTML presentation** (QBR-style) with two main sections:
+1. **E2E Testing & Bug Fixing** — run end-to-end tests across the full system. If bugs are found, create new tasks, fix, verify, commit & push. Iterate until clean.
+2. **User Testing** — test as a target user would: realistic workflows, common use cases, edge cases. Fix critical issues found. Save findings in task docs.
+3. **Product Research** — synthesize feedback from testing, research competitors and market trends, think strategically about what's missing. Output: proposed product EPICs for the next roadmap.
+4. **Tech Audit** — runs after product research (so it knows what features are coming). Audit the codebase for:
+   - Refactoring needs, performance issues, maintainability gaps, capability gaps for proposed features.
+   - Classify: **minor** findings → summary stat line (not individual tasks). **Major** findings → own EPIC and tasks in next roadmap.
+5. **Draft Next Roadmap** — combine product and tech proposals into `docs/agent/roadmap/rNNNN+1-slug.md` with status `planning`. Organize by EPIC, include rationale, prioritize by impact. Think like a product leader AND a tech leader.
+6. **Executive Review Slide** — generate an HTML presentation (QBR-style) saved to `docs/agent/roadmap/rNNNN-review.html`:
 
    **Section 1: Last Roadmap Summary**
-   - **Product**: what features we shipped, organized by EPIC/theme.
-     - **Screenshots & demos**: embed screenshots of UI changes. Where possible, generate short demo videos (screen recordings or animated GIFs) showing features in action. Every EPIC should have at least one visual.
-     - **Stats & charts**: include quantitative data — tasks completed, lines changed, test coverage delta, performance benchmarks before/after. Use embedded charts (Chart.js, inline SVG, or similar) to visualize trends and comparisons. Numbers tell the story better than prose.
-   - **Tech**: major improvements highlighted individually (perf gains, capability unlocks, significant refactors) with before/after metrics where measurable. Minor tech changes summarized as a brief stat line (e.g., "14 minor cleanups across 8 modules").
+   - **Product**: features shipped, organized by EPIC/theme. Include screenshots, demo videos/GIFs where possible. Every EPIC should have at least one visual.
+   - **Stats & charts**: tasks completed, lines changed, test coverage delta, perf before/after. Use embedded charts (Chart.js, inline SVG). Numbers tell the story better than prose.
+   - **Tech**: major improvements highlighted individually with before/after metrics. Minor tech changes as a brief stat line (e.g., "14 minor cleanups across 8 modules").
 
    **Section 2: Next Roadmap Plan**
    - **Product EPICs**: proposed features, with POC screenshots or mockups where possible.
    - **Tech EPICs**: proposed major tech work, with rationale (why now, what it unblocks).
-   - Make it easy for the CEO to evaluate and decide.
 
-2. Style: concise, visual-heavy, executive-friendly — like a quarterly business review to a CTO/CEO. Group by theme so it's easy to digest. **Prefer visuals over text** — a screenshot with a caption beats a paragraph of description.
-3. Save the slide to `docs/agent/roadmap/rNNNN-review.html`.
+   Style: concise, visual-heavy, executive-friendly. **Prefer visuals over text.**
 
-### Then Pause
-
-Present everything to the CEO:
-- Execution summary (what got done, what was skipped, what needed bug fixes).
-- User testing findings.
-- The executive review slide.
-- The proposed next roadmap.
-
-**Wait for CEO review and sign-off on the next roadmap before proceeding.**
+**Then pause.** Present the executive review slide and proposed next roadmap to the CEO. Wait for review and sign-off before proceeding.
 
 **The only reason to pause mid-execution** is if the session is about to hit context limits. In that case, write a Handoff section and tell the CEO.
 
