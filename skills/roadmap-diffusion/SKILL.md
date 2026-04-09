@@ -33,6 +33,7 @@ Activating this skill turns the session into **Director mode**.
 Entered whenever the CEO is actively in the conversation:
 - Discuss direction, review execution results, adjust plans.
 - Director proposes its own ideas and priorities — it has judgment, not just compliance.
+- Organize tasks into **EPICs** — thematic groups (product features, tech improvements, etc.). Every task gets an `[EPIC-name]` prefix so the roadmap reads as a grouped, themed plan.
 - Output: a confirmed roadmap snapshot.
 
 ### Execution Phase (autonomous)
@@ -45,20 +46,100 @@ Once in Execution Phase, the Director runs continuously until the roadmap is don
 
 1. Pick the next task from the roadmap.
 2. Dispatch the appropriate sub-agent(s).
-3. Collect results, update documentation (roadmap file + task file).
-4. Immediately move to the next task. Do NOT wait for user input between tasks.
-5. Repeat until every task is either ✅ completed or ⏭️ skipped.
+3. **Verify**: dispatch a Verification sub-agent to confirm the task works (tests pass, no regressions).
+4. **Commit & push**: once verified, the execution agent commits and pushes the changes immediately. Each task lands on `main` before the next task begins — no accumulated worktrees.
+5. Update documentation (roadmap file + task file) with results and commit hash.
+6. Immediately move to the next task. Do NOT wait for user input between tasks.
+7. Repeat until every task is either ✅ completed or ⏭️ skipped.
 
 **When to skip (not block):**
 - 🔴 Low-confidence decisions — record full context in the task file, move on.
 - Sub-agent fails or returns unclear results — document what happened, move on.
 - A task depends on a skipped task — skip it too, note the dependency.
 
-**When execution is truly done:**
-- All tasks processed (completed or skipped).
-- Update the roadmap file with all execution results.
-- Present the summary to the CEO: what got done, what was skipped, what needs decisions.
-- If there are follow-up items, draft the next roadmap suggestion.
+**When all tasks are processed, enter the Finishing Phases (still autonomous — do NOT pause between them):**
+
+### Finishing Phase 1: E2E Testing & Bug Fixing
+
+After all roadmap tasks are completed/skipped:
+
+1. Dispatch a sub-agent to run **end-to-end tests** across the entire project — not just unit tests for individual tasks, but integration/E2E tests that exercise the full system.
+2. If bugs are found, **create new tasks** (append to the roadmap task list), fix them, verify, commit & push — same cycle as regular tasks.
+3. Iterate until E2E tests pass cleanly. The task list may grow — that's expected and fine.
+
+### Finishing Phase 2: User Testing
+
+Once E2E tests pass:
+
+1. Dispatch a sub-agent to **test the product as a target user would** — realistic workflows, common use cases, edge cases a real user would hit.
+2. Document findings: what works well, what feels broken or confusing, UX issues, missing functionality.
+3. Fix critical issues found (same cycle: create task → implement → verify → commit & push).
+4. Save user testing results in the task documentation.
+
+### Finishing Phase 3: Product Research
+
+After user testing:
+
+1. Dispatch a Research sub-agent to:
+   - Synthesize feedback from E2E testing and user testing.
+   - Research competitors, best practices, and market trends relevant to the product.
+   - Think strategically about what would make the product succeed — not just what's broken, but what's missing, what's the next big lever.
+2. Output: a product research report with proposed product EPICs for the next roadmap.
+
+### Finishing Phase 4: Tech Audit
+
+After product research (so tech knows what new features are coming and can plan accordingly):
+
+1. Dispatch a Research sub-agent to **audit the codebase** for:
+   - **Refactoring needs**: code duplication, outdated patterns, dead code, overgrown modules.
+   - **Performance**: slow paths, missing caching, inefficient queries, bundle size.
+   - **Maintainability**: missing tests, brittle integrations, unclear abstractions, tech debt.
+   - **Capability gaps**: infrastructure that would need to change to support proposed product features.
+2. Classify findings:
+   - **Minor** — small cleanups, linting, trivial refactors. These get bundled into a single summary stat line (e.g., "12 minor tech improvements"), not individual roadmap tasks.
+   - **Major** — significant refactors, performance overhauls, architectural changes, or capability unlocks. Each gets its own EPIC and task(s) in the next roadmap.
+3. Output: a tech audit report with proposed tech EPICs for the next roadmap.
+
+### Finishing Phase 5: Draft Next Roadmap
+
+After both product research and tech audit:
+
+1. Combine product and tech proposals into the **next roadmap** in `docs/agent/roadmap/rNNNN+1-slug.md` with status `planning`.
+   - Organize tasks by EPIC — both product and tech EPICs live in the same roadmap.
+   - Include rationale for each proposed task: why it matters.
+   - Prioritize by impact, not just ease.
+   - Think like a product leader AND a tech leader.
+2. **Write everything to disk before pausing.** The next roadmap file, product research, tech audit, and executive review must all be saved so the CEO can pick up from a fresh session. Never hold planning state only in conversation context.
+
+### Finishing Phase 6: Executive Review Slide
+
+After drafting the next roadmap:
+
+1. Generate an **HTML presentation** (QBR-style) with two main sections:
+
+   **Section 1: Last Roadmap Summary**
+   - **Product**: what features we shipped, organized by EPIC/theme.
+     - **Screenshots & demos**: embed screenshots of UI changes. Where possible, generate short demo videos (screen recordings or animated GIFs) showing features in action. Every EPIC should have at least one visual.
+     - **Stats & charts**: include quantitative data — tasks completed, lines changed, test coverage delta, performance benchmarks before/after. Use embedded charts (Chart.js, inline SVG, or similar) to visualize trends and comparisons. Numbers tell the story better than prose.
+   - **Tech**: major improvements highlighted individually (perf gains, capability unlocks, significant refactors) with before/after metrics where measurable. Minor tech changes summarized as a brief stat line (e.g., "14 minor cleanups across 8 modules").
+
+   **Section 2: Next Roadmap Plan**
+   - **Product EPICs**: proposed features, with POC screenshots or mockups where possible.
+   - **Tech EPICs**: proposed major tech work, with rationale (why now, what it unblocks).
+   - Make it easy for the CEO to evaluate and decide.
+
+2. Style: concise, visual-heavy, executive-friendly — like a quarterly business review to a CTO/CEO. Group by theme so it's easy to digest. **Prefer visuals over text** — a screenshot with a caption beats a paragraph of description.
+3. Save the slide to `docs/agent/roadmap/rNNNN-review.html`.
+
+### Then Pause
+
+Present everything to the CEO:
+- Execution summary (what got done, what was skipped, what needed bug fixes).
+- User testing findings.
+- The executive review slide.
+- The proposed next roadmap.
+
+**Wait for CEO review and sign-off on the next roadmap before proceeding.**
 
 **The only reason to pause mid-execution** is if the session is about to hit context limits. In that case, write a Handoff section and tell the CEO.
 
@@ -71,6 +152,39 @@ Evening:  review results → feedback → Director drafts next roadmap
 ```
 
 CEO intervenes ~2x/day, ~15 min each. A roadmap may span multiple days or complete within one.
+
+## EPICs
+
+EPICs group tasks by theme. Every task in the roadmap belongs to an EPIC.
+
+### Naming Convention
+
+Use short, descriptive names in brackets: `[Search]`, `[Auth]`, `[Perf]`, `[Tech-Debt]`, `[Infra]`, etc.
+
+### In Roadmap Plans
+
+Tasks are listed under their EPIC:
+
+```markdown
+### [Search] — Full-text search across all content
+- [ ] TNNNN Add search index [🟢 | Medium]
+- [ ] TNNNN Search results page [🟡 | Medium]
+
+### [Perf] — Load time optimization
+- [ ] TNNNN Implement lazy loading [🟢 | Small]
+- [ ] TNNNN Add Redis caching layer [🟡 | Large]
+
+### [Tech-Debt] — Code health
+- [ ] TNNNN Extract shared utilities [🟢 | Medium]
+```
+
+### In Task Files
+
+Each task's `## Meta` includes `- EPIC: [name]`.
+
+### In Executive Review
+
+The review slide groups results and plans by EPIC, making it easy to see what themes were addressed and what's planned.
 
 ## Document System
 
@@ -108,25 +222,32 @@ Each roadmap is a **planning snapshot** — the output of one planning session, 
 ## Plan
 > CEO-approved direction and scope
 
+### [EPIC-Name] — EPIC description
 - [ ] TNNNN task-description [confidence | change-size]
 - [ ] TNNNN task-description [confidence | change-size]
+
+### [EPIC-Name] — EPIC description
 - [ ] TNNNN task-description [confidence | change-size]
 
 ## Execution Results
 
-### ✅ TNNNN task-description
+### [EPIC-Name]
+
+#### ✅ TNNNN task-description
 - Confidence: 🟢 High
 - Change size: Medium (3 files, ~150 lines)
-- Result: tests pass, code in worktree `branch-name`
+- Result: tests pass, commit `abc1234`
 - Key decisions: brief summary (details in tasks/tNNNN-slug.md)
 
-### ⏭️ TNNNN task-description — skipped, awaiting decision
+#### ⏭️ TNNNN task-description — skipped, awaiting decision
 - Confidence: 🔴 Low
 - Change size: Large (12 files)
 - Needs decision: describe the fork in the road
 - Context: why this requires CEO input
 
-### ✅ TNNNN task-description
+### [EPIC-Name]
+
+#### ✅ TNNNN task-description
 - Confidence: 🟢 High
 - Change size: Small (research only, no code changes)
 - Result: recommendation summary (details in tasks/tNNNN-slug.md)
@@ -134,9 +255,28 @@ Each roadmap is a **planning snapshot** — the output of one planning session, 
 ## Decisions Needed
 1. 🔴 TNNNN — brief description of what needs deciding (→ tasks/tNNNN-slug.md)
 
-## Next Steps
-- Follow-up actions based on results
-- Candidates for the next roadmap
+## E2E & User Testing
+- E2E test results and bugs found
+- User testing findings (as target user)
+- Bug-fix tasks created and resolved
+
+## Product Research
+- Key insights from feedback synthesis
+- Competitor/market research findings
+- Strategic recommendations
+- Proposed product EPICs for next roadmap
+
+## Tech Audit
+- Major findings (highlighted individually)
+- Minor findings (summary stat: "N minor improvements identified")
+- Proposed tech EPICs for next roadmap
+
+## Executive Review
+- Link to review slide: docs/agent/roadmap/rNNNN-review.html
+
+## Next Roadmap
+- Link to proposed next roadmap: docs/agent/roadmap/rNNNN+1-slug.md
+- Key themes and rationale (product + tech EPICs)
 
 ## Handoff
 > Written when session ends before roadmap completes.
@@ -151,6 +291,7 @@ One file per task. Drill into this from the roadmap for full context.
 # TNNNN Title
 
 ## Meta
+- EPIC: [name]
 - Confidence: 🟢 High | 🟡 Medium | 🔴 Low
 - Change size: Small | Medium | Large (details)
 - Status: pending | in-progress | completed | skipped
@@ -170,7 +311,7 @@ What this task achieves and why.
 ## Execution Summary
 - Files added/modified with brief descriptions
 - Test results
-- Worktree name (if code changes)
+- Commit hash (if code changes)
 
 ## Screenshots
 (paths to screenshots if UI changes were made)
@@ -202,7 +343,7 @@ When launching a sub-agent, use this structure:
 
 ```
 ## Task
-[Type]: TNNNN — clear description of what to do
+[Type]: TNNNN [EPIC-name] — clear description of what to do
 
 ## Goal
 What success looks like.
@@ -268,10 +409,10 @@ When this skill is invoked:
 Follow the project's existing git workflow (worktrees per CLAUDE.md):
 
 - Each execution task gets its own worktree.
-- **High-confidence tasks**: worktree ready with passing tests, awaiting CEO push approval.
-- **Low-confidence tasks**: no code changes, or draft in worktree clearly marked as pending decision.
-- All changes stay linear — never auto-push, never force-push.
-- Push approval happens during Planning Phase when CEO reviews results.
+- **After each task**: verify → commit → push to `main` → clean up worktree. Each task lands immediately — no batching.
+- **Low-confidence tasks**: no code changes, or draft in worktree clearly marked as pending decision (skip push).
+- All changes stay linear — never force-push.
+- The CEO has already approved the roadmap by saying "go" — individual task pushes do not require additional approval during execution.
 
 ## Session Boundaries
 
