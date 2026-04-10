@@ -33,7 +33,7 @@ Activating this skill turns the session into **Director mode**.
 Entered whenever the CEO is actively in the conversation:
 - Discuss direction, review execution results, adjust plans.
 - Director proposes its own ideas and priorities — it has judgment, not just compliance.
-- Organize tasks into **EPICs** — thematic groups (product features, tech improvements, etc.). Every task gets an `[EPIC-name]` prefix so the roadmap reads as a grouped, themed plan.
+- Organize tasks into **EPICs** — numbered thematic groups (product features, tech improvements, etc.). Each EPIC gets a sequential ID (`EPIC-1`, `EPIC-2`, ...) and a short Jira-style tag (`UI`, `REN`, `SRCH`, `PERF`, etc.) so the roadmap reads as a grouped, themed plan.
 - Output: a confirmed roadmap snapshot.
 
 ### Execution Phase (autonomous)
@@ -48,25 +48,25 @@ Once in Execution Phase, the Director runs continuously until the roadmap is don
 2. Dispatch the appropriate sub-agent(s).
 3. **Verify**: dispatch a Verification sub-agent to confirm the task works (tests pass, no regressions).
 4. **Commit & push**: once verified, the execution agent commits and pushes the changes immediately. Each task lands on `main` before the next task begins — no accumulated worktrees.
-5. Update documentation (roadmap file + task file) with results and commit hash.
+5. Update documentation (roadmap file + EPIC file) with results and commit hash.
 6. Immediately move to the next task. Do NOT wait for user input between tasks.
 7. Repeat until every task is either ✅ completed or ⏭️ skipped.
 
 **When to skip (not block):**
-- 🔴 Low-confidence decisions — record full context in the task file, move on.
+- 🔴 Low-confidence decisions — record full context in the EPIC file, move on.
 - Sub-agent fails or returns unclear results — document what happened, move on.
 - A task depends on a skipped task — skip it too, note the dependency.
 
 **After all roadmap tasks are processed, the Director appends the following closing tasks to the roadmap and continues the same cycle (dispatch → verify → commit & push → next):**
 
 1. **E2E Testing & Bug Fixing** — run end-to-end tests across the full system. If bugs are found, create new tasks, fix, verify, commit & push. Iterate until clean.
-2. **User Testing** — test as a target user would: realistic workflows, common use cases, edge cases. Fix critical issues found. Save findings in task docs.
+2. **User Testing** — test as a target user would: realistic workflows, common use cases, edge cases. Fix critical issues found. Save findings in EPIC docs.
 3. **Product Research** — synthesize feedback from testing, research competitors and market trends, think strategically about what's missing. Output: proposed product EPICs for the next roadmap.
 4. **Tech Audit** — runs after product research (so it knows what features are coming). Audit the codebase for:
    - Refactoring needs, performance issues, maintainability gaps, capability gaps for proposed features.
    - Classify: **minor** findings → summary stat line (not individual tasks). **Major** findings → own EPIC and tasks in next roadmap.
-5. **Draft Next Roadmap** — combine product and tech proposals into `docs/agent/roadmap/rNNNN+1-slug.md` with status `planning`. Organize by EPIC, include rationale, prioritize by impact. Think like a product leader AND a tech leader.
-6. **Executive Review Slide** — generate an HTML presentation (QBR-style) saved to `docs/agent/roadmap/rNNNN-review.html`:
+5. **Draft Next Roadmap** — combine product and tech proposals into `docs/agent/roadmap/RM-{N+1}-slug.md` with status `planning`. Organize by EPIC, include rationale, prioritize by impact. Think like a product leader AND a tech leader.
+6. **Executive Review Slide** — generate an HTML presentation (QBR-style) saved to `docs/agent/roadmap/RM-N-review.html`:
 
    **Section 1: Last Roadmap Summary**
    - **Product**: features shipped, organized by EPIC/theme. Include screenshots, demo videos/GIFs where possible. Every EPIC should have at least one visual.
@@ -99,28 +99,34 @@ EPICs group tasks by theme. Every task in the roadmap belongs to an EPIC.
 
 ### Naming Convention
 
-Use short, descriptive names in brackets: `[Search]`, `[Auth]`, `[Perf]`, `[Tech-Debt]`, `[Infra]`, etc.
+Each EPIC gets a sequential ID and a short uppercase tag (like Jira project keys):
+
+- **Format**: `EPIC-N [TAG]` — e.g. `EPIC-1 [UI]`, `EPIC-2 [SRCH]`, `EPIC-13 [PERF]`
+- **No zero-padding** — `EPIC-1`, not `EPIC-001`
+- **Tags are short** (2-5 chars), derived from the theme: `UI`, `REN`, `SRCH`, `AUTH`, `PERF`, `INFRA`, `DX`, `DATA`, `API`, etc.
+- **Tags are unique per roadmap** — no two EPICs share a tag within the same roadmap.
+- EPIC numbers are **globally unique per project** — they never reset between roadmaps.
 
 ### In Roadmap Plans
 
 Tasks are listed under their EPIC:
 
 ```markdown
-### [Search] — Full-text search across all content
-- [ ] TNNNN Add search index [🟢 | Medium]
-- [ ] TNNNN Search results page [🟡 | Medium]
+### EPIC-1 [SRCH] — Full-text search across all content
+- [ ] Add search index [🟢 | Medium]
+- [ ] Search results page [🟡 | Medium]
 
-### [Perf] — Load time optimization
-- [ ] TNNNN Implement lazy loading [🟢 | Small]
-- [ ] TNNNN Add Redis caching layer [🟡 | Large]
+### EPIC-2 [PERF] — Load time optimization
+- [ ] Implement lazy loading [🟢 | Small]
+- [ ] Add Redis caching layer [🟡 | Large]
 
-### [Tech-Debt] — Code health
-- [ ] TNNNN Extract shared utilities [🟢 | Medium]
+### EPIC-3 [DX] — Code health
+- [ ] Extract shared utilities [🟢 | Medium]
 ```
 
-### In Task Files
+### In EPIC Files
 
-Each task's `## Meta` includes `- EPIC: [name]`.
+Each EPIC doc (`docs/agent/epics/EPIC-N-slug.md`) tracks all tasks, decisions, and execution details for that EPIC.
 
 ### In Executive Review
 
@@ -134,26 +140,27 @@ All documents live under `docs/agent/` in the managed project:
 project/docs/
 └── agent/
     ├── roadmap/
-    │   ├── r0001-user-profile-pages.md
-    │   └── r0002-search-module.md
-    └── tasks/
-        ├── t0001-add-search.md
-        └── t0002-fix-auth.md
+    │   ├── RM-1-user-profile-pages.md
+    │   └── RM-2-search-module.md
+    └── epics/
+        ├── EPIC-1-full-text-search.md
+        ├── EPIC-2-load-time-optimization.md
+        └── EPIC-3-code-health.md
 ```
 
 ### Numbering Convention
 
-- Roadmaps: `r` prefix — `r0001`, `r0002`, ...
-- Tasks: `t` prefix — `t0001`, `t0002`, ...
-- 4-digit, zero-padded, sequential.
-- **Globally unique per project** — task numbers never reset between roadmaps.
+- Roadmaps: `RM-` prefix — `RM-1`, `RM-2`, `RM-12`, `RM-103`, ...
+- EPICs: `EPIC-` prefix — `EPIC-1`, `EPIC-2`, `EPIC-19`, ... (no zero-padding)
+- **No zero-padding** on any ID — `RM-1`, not `RM-001`.
+- All IDs are **globally unique per project** — numbers never reset between roadmaps.
 
-### Roadmap Template `docs/agent/roadmap/rNNNN-slug.md`
+### Roadmap Template `docs/agent/roadmap/RM-N-slug.md`
 
 Each roadmap is a **planning snapshot** — the output of one planning session, not a living global document.
 
 ```markdown
-# RNNNN Title
+# RM-N Title
 
 ## Meta
 - Created: YYYY-MM-DD
@@ -162,38 +169,38 @@ Each roadmap is a **planning snapshot** — the output of one planning session, 
 ## Plan
 > CEO-approved direction and scope
 
-### [EPIC-Name] — EPIC description
-- [ ] TNNNN task-description [confidence | change-size]
-- [ ] TNNNN task-description [confidence | change-size]
+### EPIC-N [TAG] — EPIC description
+- [ ] task-description [confidence | change-size]
+- [ ] task-description [confidence | change-size]
 
-### [EPIC-Name] — EPIC description
-- [ ] TNNNN task-description [confidence | change-size]
+### EPIC-N [TAG] — EPIC description
+- [ ] task-description [confidence | change-size]
 
 ## Execution Results
 
-### [EPIC-Name]
+### EPIC-N [TAG]
 
-#### ✅ TNNNN task-description
+#### ✅ task-description
 - Confidence: 🟢 High
 - Change size: Medium (3 files, ~150 lines)
 - Result: tests pass, commit `abc1234`
-- Key decisions: brief summary (details in tasks/tNNNN-slug.md)
+- Key decisions: brief summary (details in epics/EPIC-N-slug.md)
 
-#### ⏭️ TNNNN task-description — skipped, awaiting decision
+#### ⏭️ task-description — skipped, awaiting decision
 - Confidence: 🔴 Low
 - Change size: Large (12 files)
 - Needs decision: describe the fork in the road
 - Context: why this requires CEO input
 
-### [EPIC-Name]
+### EPIC-N [TAG]
 
-#### ✅ TNNNN task-description
+#### ✅ task-description
 - Confidence: 🟢 High
 - Change size: Small (research only, no code changes)
-- Result: recommendation summary (details in tasks/tNNNN-slug.md)
+- Result: recommendation summary (details in epics/EPIC-N-slug.md)
 
 ## Decisions Needed
-1. 🔴 TNNNN — brief description of what needs deciding (→ tasks/tNNNN-slug.md)
+1. 🔴 EPIC-N [TAG] — brief description of what needs deciding (→ epics/EPIC-N-slug.md)
 
 ## E2E & User Testing
 - E2E test results and bugs found
@@ -212,10 +219,10 @@ Each roadmap is a **planning snapshot** — the output of one planning session, 
 - Proposed tech EPICs for next roadmap
 
 ## Executive Review
-- Link to review slide: docs/agent/roadmap/rNNNN-review.html
+- Link to review slide: docs/agent/roadmap/RM-N-review.html
 
 ## Next Roadmap
-- Link to proposed next roadmap: docs/agent/roadmap/rNNNN+1-slug.md
+- Link to proposed next roadmap: docs/agent/roadmap/RM-{N+1}-slug.md
 - Key themes and rationale (product + tech EPICs)
 
 ## Handoff
@@ -223,22 +230,35 @@ Each roadmap is a **planning snapshot** — the output of one planning session, 
 > Captures: where we stopped, what's in progress, what's next, any open decisions.
 ```
 
-### Task Template `docs/agent/tasks/tNNNN-slug.md`
+### EPIC Template `docs/agent/epics/EPIC-N-slug.md`
 
-One file per task. Drill into this from the roadmap for full context.
+One file per EPIC. Drill into this from the roadmap for full context on all tasks within the EPIC.
 
 ```markdown
-# TNNNN Title
+# EPIC-N [TAG] — Title
 
 ## Meta
-- EPIC: [name]
-- Confidence: 🟢 High | 🟡 Medium | 🔴 Low
-- Change size: Small | Medium | Large (details)
-- Status: pending | in-progress | completed | skipped
-- Parent roadmap: RNNNN
+- Tag: TAG
+- Status: pending | in-progress | completed | partial
+- Parent roadmap: RM-N
 
 ## Goal
-What this task achieves and why.
+What this EPIC achieves and why.
+
+## Tasks
+
+### ✅ task-description
+- Confidence: 🟢 High
+- Change size: Medium (3 files, ~150 lines)
+- Result: tests pass, commit `abc1234`
+
+### ⏭️ task-description — skipped
+- Confidence: 🔴 Low
+- Reason: why it was skipped
+
+### 🔲 task-description — pending
+- Confidence: 🟡 Medium
+- Change size: Small
 
 ## Key Decisions
 
@@ -251,7 +271,7 @@ What this task achieves and why.
 ## Execution Summary
 - Files added/modified with brief descriptions
 - Test results
-- Commit hash (if code changes)
+- Commit hashes
 
 ## Screenshots
 (paths to screenshots if UI changes were made)
@@ -263,9 +283,9 @@ What this task achieves and why.
 
 | Type | Purpose | Example prompt |
 |------|---------|----------------|
-| **Research** | Read code, docs, analyze current state | "Analyze the auth module architecture and summarize in docs/agent/tasks/t0012-auth-analysis.md" |
-| **Planning** | Break down tasks, design solutions | "Design an implementation plan for the search feature, write to docs/agent/tasks/t0013-search-plan.md" |
-| **Execution** | Write code, run tests, produce results | "Implement and test the search API per the plan in docs/agent/tasks/t0013-search-plan.md" |
+| **Research** | Read code, docs, analyze current state | "Analyze the auth module architecture and summarize in docs/agent/epics/EPIC-3-auth.md" |
+| **Planning** | Break down tasks, design solutions | "Design an implementation plan for EPIC-1 [SRCH], write to docs/agent/epics/EPIC-1-search.md" |
+| **Execution** | Write code, run tests, produce results | "Implement and test the search API per the plan in docs/agent/epics/EPIC-1-search.md" |
 | **Verification** | Review another agent's output | "Review the search API implementation in worktree search-api, check correctness and test coverage" |
 
 The Director decides when to use which type, whether to chain them, and whether verification is needed.
@@ -283,7 +303,7 @@ When launching a sub-agent, use this structure:
 
 ```
 ## Task
-[Type]: TNNNN [EPIC-name] — clear description of what to do
+[Type]: EPIC-N [TAG] — clear description of what to do
 
 ## Goal
 What success looks like.
@@ -292,10 +312,10 @@ What success looks like.
 - Project root: /path/to/project
 - Read CLAUDE.md at project root for project conventions
 - Relevant files: list specific paths
-- Parent roadmap: docs/agent/roadmap/rNNNN-slug.md
+- Parent roadmap: docs/agent/roadmap/RM-N-slug.md
 
 ## Constraints
-- Write results to: docs/agent/tasks/tNNNN-slug.md
+- Write results to: docs/agent/epics/EPIC-N-slug.md
 - [For execution agents]: use git worktree workflow from CLAUDE.md
 - [For execution agents]: do NOT push — leave worktree ready for review
 
@@ -342,7 +362,7 @@ When this skill is invoked:
    - **Exists**: read the latest roadmap file, present status and pending decisions to CEO.
    - **Does not exist**: dispatch a Research sub-agent to survey the project (codebase structure, existing docs, tech stack), then present findings.
 3. **Enter Planning Phase** — discuss direction with CEO, propose a roadmap.
-4. **On "go"**: create `docs/agent/roadmap/` and `docs/agent/tasks/` directories if needed, write the roadmap and task files, enter Execution Phase.
+4. **On "go"**: create `docs/agent/roadmap/` and `docs/agent/epics/` directories if needed, write the roadmap and EPIC files, enter Execution Phase.
 
 ## Git Integration
 
